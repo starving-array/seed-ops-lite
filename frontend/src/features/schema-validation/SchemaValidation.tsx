@@ -1,13 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Card,
   Badge,
   Divider,
   Grid,
   PageHeader,
+  Spinner,
 } from '../../components/ui'
 import { useSchema } from '../../context/SchemaContext'
 import type { Table, Relationship } from '../../context/SchemaContext'
+import { schemaService } from '../../services/schema'
 
 interface ValidationResult {
   id: string
@@ -347,9 +349,45 @@ export const SchemaValidation = () => {
   )
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
 
-  const validationResults = useMemo(() => {
-    return runValidation(tables, relationships)
+  const [backendResults, setBackendResults] = useState<ValidationResult[]>([])
+  const [isValidating, setIsValidating] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const performBackendValidation = async () => {
+      if (tables.length === 0) {
+        setBackendResults([])
+        return
+      }
+      try {
+        setIsValidating(true)
+        const response = await schemaService.validateSchema({
+          tables,
+          relationships,
+        })
+        if (active && response.success && response.data) {
+          setBackendResults(response.data)
+        }
+      } catch {
+        // Fallback silently if offline
+      } finally {
+        if (active) {
+          setIsValidating(false)
+        }
+      }
+    }
+    performBackendValidation()
+    return () => {
+      active = false
+    }
   }, [tables, relationships])
+
+  const validationResults = useMemo(() => {
+    if (backendResults.length > 0) {
+      return backendResults
+    }
+    return runValidation(tables, relationships)
+  }, [tables, relationships, backendResults])
 
   const totalChecks = validationResults.length
   const errorsCount = validationResults.filter((r) => r.severity === 'Error')
@@ -397,10 +435,20 @@ export const SchemaValidation = () => {
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6 text-left animate-fade-in">
-      <PageHeader
-        title="Schema Validation Workspace"
-        subtitle="Analyze configuration models, foreign constraints, and syntax identifiers."
-      />
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <PageHeader
+          title="Schema Validation Workspace"
+          subtitle="Analyze configuration models, foreign constraints, and syntax identifiers."
+        />
+        {isValidating && (
+          <div className="flex items-center gap-2 bg-slate-900/60 py-1.5 px-3 rounded-xl border border-slate-800/80">
+            <Spinner size="sm" />
+            <span className="text-xs text-indigo-400 animate-pulse font-medium">
+              Validating...
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Summary Cards */}
       <Grid cols={4} className="gap-6">

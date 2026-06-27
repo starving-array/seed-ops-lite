@@ -6,12 +6,21 @@ import {
   Divider,
   PageHeader,
   EmptyState,
+  Spinner,
 } from '../../components/ui'
 import { useSchema } from '../../context/SchemaContext'
 import type { Table, Column, Relationship } from '../../context/SchemaContext'
 
 export const SchemaGenerator = () => {
-  const { tables, setTables, relationships, setRelationships } = useSchema()
+  const {
+    tables,
+    setTables,
+    relationships,
+    setRelationships,
+    isLoading,
+    isSaving,
+    triggerSave,
+  } = useSchema()
 
   const [selectedTableId, setSelectedTableId] = useState<string>('1')
   const [tableSearch, setTableSearch] = useState<string>('')
@@ -379,12 +388,45 @@ export const SchemaGenerator = () => {
 
   const allWarnings = [...schemaWarnings, ...relationshipWarnings]
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <Spinner size="lg" />
+        <span className="text-sm text-slate-400">
+          Loading schema configuration from backend...
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6 text-left animate-fade-in">
-      <PageHeader
-        title="Schema Designer"
-        subtitle="Interactively build entity relationship tables and columns for database generation."
-      />
+      <div className="flex justify-between items-start flex-wrap gap-4">
+        <PageHeader
+          title="Schema Designer"
+          subtitle="Interactively build entity relationship tables and columns for database generation."
+        />
+        <div className="flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+          {isSaving ? (
+            <span className="text-xs text-indigo-400 animate-pulse flex items-center gap-1.5 font-medium px-2">
+              <span>⚡</span> Saving...
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium px-2">
+              <span>✓</span> Synced
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={triggerSave}
+            disabled={isSaving}
+            className="text-xs"
+          >
+            Save Schema
+          </Button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ==================== LEFT PANEL: TABLES LIST ==================== */}

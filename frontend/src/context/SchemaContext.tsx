@@ -1,5 +1,14 @@
 /* eslint-disable react/only-export-components */
-import React, { createContext, useContext, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+} from 'react'
+import type { ReactNode } from 'react'
+import { schemaService } from '../services/schema'
+import { useNotifications } from './NotificationContext'
 
 export interface Column {
   id: string
@@ -34,100 +43,126 @@ interface SchemaContextType {
   setTables: React.Dispatch<React.SetStateAction<Table[]>>
   relationships: Relationship[]
   setRelationships: React.Dispatch<React.SetStateAction<Relationship[]>>
+  isLoading: boolean
+  isSaving: boolean
+  triggerSave: () => Promise<void>
 }
 
 const SchemaContext = createContext<SchemaContextType | undefined>(undefined)
 
-export const SchemaProvider = ({ children }: { children: React.ReactNode }) => {
-  const [tables, setTables] = useState<Table[]>([
-    {
-      id: '1',
-      name: 'users',
-      columns: [
-        {
-          id: 'c1',
-          name: 'id',
-          type: 'INTEGER',
-          isPrimaryKey: true,
-          isNullable: false,
-          defaultValue: '',
-        },
-        {
-          id: 'c2',
-          name: 'email',
-          type: 'VARCHAR',
-          isPrimaryKey: false,
-          isNullable: false,
-          defaultValue: '',
-        },
-        {
-          id: 'c3',
-          name: 'created_at',
-          type: 'TIMESTAMP',
-          isPrimaryKey: false,
-          isNullable: false,
-          defaultValue: 'CURRENT_TIMESTAMP',
-        },
-      ],
-    },
-    {
-      id: '2',
-      name: 'orders',
-      columns: [
-        {
-          id: 'o1',
-          name: 'id',
-          type: 'INTEGER',
-          isPrimaryKey: true,
-          isNullable: false,
-          defaultValue: '',
-        },
-        {
-          id: 'o2',
-          name: 'user_id',
-          type: 'INTEGER',
-          isPrimaryKey: false,
-          isNullable: false,
-          defaultValue: '',
-        },
-        {
-          id: 'o3',
-          name: 'total',
-          type: 'FLOAT',
-          isPrimaryKey: false,
-          isNullable: false,
-          defaultValue: '0.00',
-        },
-        {
-          id: 'o4',
-          name: 'status',
-          type: 'VARCHAR',
-          isPrimaryKey: false,
-          isNullable: false,
-          defaultValue: "'pending'",
-        },
-      ],
-    },
-  ])
+export const SchemaProvider = ({ children }: { children: ReactNode }) => {
+  const [tables, setTables] = useState<Table[]>([])
+  const [relationships, setRelationships] = useState<Relationship[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const { addNotification } = useNotifications()
 
-  const [relationships, setRelationships] = useState<Relationship[]>([
-    {
-      id: 'r1',
-      name: 'fk_orders_user_id',
-      sourceTableId: '2',
-      sourceColumnId: 'o2',
-      targetTableId: '1',
-      targetColumnId: 'c1',
-      type: 'many-to-one',
-      isRequired: true,
-      cascadeDelete: true,
-      cascadeUpdate: true,
-    },
-  ])
+  const isLoadedRef = useRef(false)
+
+  // 1. Load schema from backend on startup
+  useEffect(() => {
+    const fetchSchema = async () => {
+      try {
+        setIsLoading(true)
+        const response = await schemaService.loadSchema()
+        if (response.success && response.data) {
+          setTables(response.data.tables)
+          setRelationships(response.data.relationships)
+          addNotification({
+            type: 'success',
+            title: 'Schema Registry Loaded',
+            message: 'Database schema configuration loaded from backend successfully.',
+          })
+        } else {
+          addNotification({
+            type: 'warning',
+            title: 'Offline Schema Mode',
+            message:
+              response.error?.message ||
+              'Could not load schema. Initializing with local designer layout.',
+          })
+        }
+      } catch (err: any) {
+        addNotification({
+          type: 'error',
+          title: 'Connection Failure',
+          message:
+            err.message ||
+            'Failed to establish backend handshake. Running in offline mockup mode.',
+        })
+      } finally {
+        isLoadedRef.current = true
+        setIsLoading(false)
+      }
+    }
+    fetchSchema()
+  }, [addNotification])
+
+  // Explicit Save manual function
+  const triggerSave = async () => {
+    try {
+      setIsSaving(true)
+      const response = await schemaService.saveSchema({ tables, relationships })
+      if (!response.success) {
+        addNotification({
+          type: 'error',
+          title: 'Manual Save Failed',
+          message: response.error?.message || 'Server rejected schema updates.',
+        })
+      } else {
+        addNotification({
+          type: 'success',
+          title: 'Schema Saved',
+          message: 'All relational tables and links persisted to backend database.',
+        })
+      }
+    } catch (err: any) {
+      addNotification({
+        type: 'error',
+        title: 'Network Timeout',
+        message: err.message || 'Auto-save offline.',
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // 2. Debounced Auto-Save on state updates
+  useEffect(() => {
+    if (!isLoadedRef.current) return
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSaving(true)
+        const response = await schemaService.saveSchema({ tables, relationships })
+        if (!response.success) {
+          addNotification({
+            type: 'warning',
+            title: 'Persist Failure',
+            message: response.error?.message || 'Failed to auto-save schema.',
+          })
+        }
+      } catch {
+        // Silent save warning, handle in manual save trigger
+      } finally {
+        setIsSaving(false)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [tables, relationships, addNotification])
 
   return (
     <SchemaContext.Provider
-      value={{ tables, setTables, relationships, setRelationships }}
+      value={{
+        tables,
+        setTables,
+        relationships,
+        setRelationships,
+        isLoading,
+        isSaving,
+        triggerSave,
+      }}
     >
       {children}
     </SchemaContext.Provider>
