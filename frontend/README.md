@@ -15,10 +15,27 @@ The frontend is bootstrapped with a modern, high-performance, standards-complian
 
 ---
 
+## Folder Organization
+
+The codebase maintains a clean separation of concerns:
+```text
+frontend/src/
+├── api/             # Centralized HTTP request client and configuration loader
+├── components/      # Reusable design system primitives, cards, and feedback components
+├── services/        # Service client hooks querying backend endpoints
+├── types/           # Global model interfaces and API response envelopes
+├── utils/           # Shared utility tools (e.g., custom logging wrapper)
+├── pages.tsx        # View component definitions
+├── App.tsx          # Main layout shell and navigation router
+└── main.tsx         # Virtual DOM renderer entrypoint
+```
+
+---
+
 ## Layout Overview
 
 The UI is structured around a responsive global application shell matching modern desktop design architectures:
-* **Sidebar (`<aside>`)**: Primary navigation links equipped with status icons, active page highlights, and width toggle controls (expanded `64rem` vs collapsed `20rem`). Responsive breakpoints switch the sidebar to a full-screen drawer layout on tablet/mobile screens.
+* **Sidebar (`<aside>`)**: Primary navigation links equipped with status icons, active page highlights, and width toggle controls (expanded `64rem` / `w-64` vs collapsed `20rem` / `w-20`). Responsive breakpoints switch the sidebar to a full-screen drawer layout on tablet/mobile screens.
 * **Header (`<header>`)**: Sticky global workspace banner providing viewport menu controls, layout headings, and interactive placeholders for theme toggling and settings management.
 * **Content Canvas (`<main>`)**: Accessible core viewing viewport carrying landmarks and focus attributes.
 * **Footer (`<footer>`)**: System status info including application version indicators, copyrights, and direct licensing reference links.
@@ -55,19 +72,30 @@ Theme color tokens are configured inside the Tailwind v4 `@theme` directive in `
 | `Spinner` | Centered loading spinner animation. | `size`: `sm`, `md`, `lg`. |
 | `Divider` | Horizontal dividing line with center labels. | `label` (optional text). |
 
-### 3. Layout Helpers
+---
 
-* `Container` – Max-width `7xl` layout centering helper.
-* `PageHeader` – Semantic page title header with custom sub-description spacing.
-* `Section` – Standard spacing utility for document blocks.
-* `Stack` – Flex-based layout. Supports `direction` (`col`, `row`) and `gap` (`sm`, `md`, `lg`).
-* `Grid` – CSS Grid wrapper. Supports `cols` (`1`, `2`, `3`, `4`) with automatic tablet/mobile scaling.
+## API Layer & Application Services
 
-### 4. System Feedback States
+Communication with the backend uses a custom, lightweight HTTP client built on standard browser APIs.
 
-* `EmptyState` – Displayed when no data is loaded. Includes illustration emojis, descriptions, and action trigger buttons.
-* `LoadingState` – Full-page spinning loader with animated text.
-* `ErrorState` – Card displaying error logs and retry CTA buttons.
+### 1. API Environment Configuration
+
+The client reads properties from system environment variables (with defaults):
+* `VITE_API_BASE_URL` (Base backend URL, default: `http://localhost:8000`).
+* `VITE_API_TIMEOUT` (Request cancellation threshold in milliseconds, default: `10000`).
+
+### 2. Error Normalization Matrix
+
+All failures are normalized into a unified interface `ApiError` mapping these primary codes:
+* `NETWORK_ERROR` – Triggered if connection is unavailable or host name resolution fails.
+* `TIMEOUT` – Triggered if response duration exceeds the defined timeout threshold.
+* `VALIDATION_ERROR` – Triggered on 422 HTTP responses (extracts validation error details).
+* `SERVER_ERROR` – Triggered on status code >= 500 backend exceptions.
+* `UNEXPECTED_ERROR` – Fallback error catch.
+
+### 3. Request Orchestrations
+* **Request Retries**: Requests failing due to transient network failures can automatically retry up to $N$ times.
+* **Abort Actions**: Employs native `AbortController` controllers to support direct request timeout thresholds and cancel active pending queries.
 
 ---
 
