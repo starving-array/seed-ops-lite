@@ -22,6 +22,7 @@ The codebase maintains a clean separation of concerns:
 frontend/src/
 ├── api/             # Centralized HTTP request client and configuration loader
 ├── components/      # Reusable design system primitives, cards, and feedback components
+├── context/         # Global application context stores and custom hooks
 ├── services/        # Service client hooks querying backend endpoints
 ├── types/           # Global model interfaces and API response envelopes
 ├── utils/           # Shared utility tools (e.g., custom logging wrapper)
@@ -74,6 +75,34 @@ Theme color tokens are configured inside the Tailwind v4 `@theme` directive in `
 
 ---
 
+## Global Application State
+
+Application-wide state is managed using React Context and custom hooks.
+
+### 1. Store Architecture
+
+The state is split into two primary context providers located under `src/context/`:
+* **`AppProvider`**: Responsible for global UI settings (sidebar width mode, mobile drawers toggling), theme preferences, global loading flags, settings parameters, active page headers, and modal indicators.
+* **`NotificationProvider`**: Responsible for enqueuing and dequeuing toast banners with auto-dismiss timers.
+
+### 2. Reusable State Hooks
+
+Custom hooks expose target scopes cleanly to React components:
+* `useTheme()` – Get current theme (`dark` | `light`) and switch themes.
+* `useSidebar()` – Toggle sidebar collapsed mode or mobile navigation drawer state.
+* `useLoading()` – Fetch global spinner status and toggles.
+* `useSettings()` – Read and modify custom app parameters (themePreference, reducedMotion).
+* `useNotifications()` – Add and dismiss toast notifications.
+* `useUIState()` – Manage page title definitions, modal views, and dialog layouts.
+* `useAppInfo()` – Read app compilation specifications (version, env).
+
+### 3. Persistence Strategy
+
+* App configurations and user preferences (`AppSettings`) are persisted inside the browser's `localStorage` (under the key `safeseedops_settings`) to preserve selections between sessions.
+* System theme matching is resolved on startup if the theme preference is set to `'system'`.
+
+---
+
 ## API Layer & Application Services
 
 Communication with the backend uses a custom, lightweight HTTP client built on standard browser APIs.
@@ -92,10 +121,6 @@ All failures are normalized into a unified interface `ApiError` mapping these pr
 * `VALIDATION_ERROR` – Triggered on 422 HTTP responses (extracts validation error details).
 * `SERVER_ERROR` – Triggered on status code >= 500 backend exceptions.
 * `UNEXPECTED_ERROR` – Fallback error catch.
-
-### 3. Request Orchestrations
-* **Request Retries**: Requests failing due to transient network failures can automatically retry up to $N$ times.
-* **Abort Actions**: Employs native `AbortController` controllers to support direct request timeout thresholds and cancel active pending queries.
 
 ---
 
