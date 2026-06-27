@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   BrowserRouter as Router,
   Routes,
@@ -13,8 +13,14 @@ import {
   useSidebar,
   useAppInfo,
   useUIState,
+  useLoading,
 } from './context/AppContext'
-import { NotificationProvider } from './context/NotificationContext'
+import {
+  NotificationProvider,
+  useNotifications,
+} from './context/NotificationContext'
+import { Badge } from './components/ui'
+import { healthService } from './services/health'
 import {
   Dashboard,
   Projects,
@@ -50,7 +56,55 @@ function AppContent() {
   const { theme, setTheme } = useTheme()
   const { version } = useAppInfo()
   const { currentPageTitle, setCurrentPageTitle } = useUIState()
+  const { setIsLoading } = useLoading()
+  const { addNotification } = useNotifications()
   const location = useLocation()
+
+  const [connectionStatus, setConnectionStatus] = useState<
+    'Connected' | 'Connecting' | 'Unavailable' | 'Timeout'
+  >('Connecting')
+
+  // End-to-end Backend Connectivity Verification
+  useEffect(() => {
+    const verifyConnectivity = async () => {
+      setConnectionStatus('Connecting')
+      setIsLoading(true)
+      const res = await healthService.checkStatus()
+      setIsLoading(false)
+
+      if (res.success) {
+        setConnectionStatus('Connected')
+        addNotification({
+          type: 'success',
+          title: 'Backend Connected',
+          message: 'Established end-to-end connectivity with FastAPI backend.',
+          duration: 4000,
+        })
+      } else {
+        const err = res.error
+        if (err?.code === 'TIMEOUT') {
+          setConnectionStatus('Timeout')
+          addNotification({
+            type: 'error',
+            title: 'Connection Timeout',
+            message: 'Failed to connect: The backend service request timed out.',
+            duration: 5000,
+          })
+        } else {
+          setConnectionStatus('Unavailable')
+          addNotification({
+            type: 'error',
+            title: 'Backend Offline',
+            message:
+              'Failed to connect: Network error or backend service is unavailable.',
+            duration: 5000,
+          })
+        }
+      }
+    }
+
+    verifyConnectivity()
+  }, [addNotification, setIsLoading])
 
   // Synchronize Page Title on Location Path Changes
   useEffect(() => {
@@ -169,8 +223,22 @@ function AppContent() {
               >
                 <span className="text-2xl">☰</span>
               </button>
-              <div className="font-semibold text-slate-200 text-lg">
-                {currentPageTitle}
+              <div className="font-semibold text-slate-200 text-lg flex items-center gap-3">
+                <span>{currentPageTitle}</span>
+                <Badge
+                  variant={
+                    connectionStatus === 'Connected'
+                      ? 'success'
+                      : connectionStatus === 'Connecting'
+                        ? 'info'
+                        : connectionStatus === 'Timeout'
+                          ? 'warning'
+                          : 'error'
+                  }
+                  className="normal-case text-[10px] py-0.5 px-2 font-bold"
+                >
+                  {connectionStatus}
+                </Badge>
               </div>
             </div>
 
