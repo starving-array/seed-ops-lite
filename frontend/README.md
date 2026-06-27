@@ -58,7 +58,17 @@ The **Dashboard** is the principal operations center summarizing metrics and pro
 The **Project Workspace** manages custom database config files:
 * **In-Memory Adding**: Interactive Prompt workflow to configure new custom projects on the fly.
 * **Filters Toolbar**: Text query search boxes paired with toggle buttons to filter projects between `All`, `Verified`, and `Pending` flags.
-* **Empty State Cards**: Renders custom illustrations and CTA actions when query searches yield no matching items.
+* **Empty State Cards**: Renders custom illustrations and CTA actions when query searches yield no matching cards.
+
+---
+
+## Schema Designer Overview
+
+The **Schema Designer** (under `/schema-generator`) provides a functional workspace for designing relational schemas:
+* **Three-Panel Layout**:
+  * **Left Panel**: Handles adding, searching, renaming, and deleting tables. List badge counters track total column sizes.
+  * **Center Panel**: The selected table column manager. Supports field renaming, type picking (`INTEGER`, `VARCHAR`, `TEXT`, `FLOAT`, `BOOLEAN`, `TIMESTAMP`), toggling PK/Null tags, default value mappings, and a relationship section placeholder.
+  * **Right Panel**: Renders real-time summary aggregates (tables, columns, primary keys, relationships) and warning notifications (missing keys, empty tables).
 
 ---
 
@@ -66,55 +76,17 @@ The **Project Workspace** manages custom database config files:
 
 All reusable UI primitives and styling tokens are established in [frontend/src/components/ui.tsx](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/frontend/src/components/ui.tsx).
 
-### 1. Theme Styling Tokens
-
-Theme color tokens are configured inside the Tailwind v4 `@theme` directive in `src/index.css`:
-* **Primary**: `#4f46e5` (Indigo brand color)
-* **Secondary**: `#64748b` (Slate slate color)
-* **Success**: `#10b981` (Emerald green)
-* **Warning**: `#f59e0b` (Amber yellow)
-* **Error**: `#ef4444` (Red error status)
-* **Neutral**: `#0f172a` (Deep slate background)
-* **Border Radius Scale**: `xl` (12px), `2xl` (16px), `3xl` (24px) for rounded components.
-
-### 2. UI Components & Variants
-
-| Component | Description | Available Variants / Properties |
-| :--- | :--- | :--- |
-| `Button` | Standard action button with keyboard focus targets. | `variant`: `primary`, `secondary`, `outline`, `ghost`, `danger`. `size`: `sm`, `md`, `lg`. |
-| `Card` | Glassmorphic background container. | `hoverable`: boolean (shadow/border hover transition). |
-| `Input` | Semantic text input with labels and error handlers. | `label`, `error`, default HTML input properties. |
-| `Textarea` | Responsive multi-line text container. | `label`, `error`, `rows`, default HTML properties. |
-| `Select` | Dropdown picker with styled arrows. | `label`, `error`, `options` array. |
-| `Checkbox` | Styled checkbox with select-none labels. | `label`, `error`, checked attributes. |
-| `Badge` | Colored text tag representing states. | `variant`: `info`, `success`, `warning`, `error`. |
-| `Alert` | Viewport notification alert card. | `variant`: `info`, `success`, `warning`, `error`, `title`, `onClose`. |
-| `Spinner` | Centered loading spinner animation. | `size`: `sm`, `md`, `lg`. |
-| `Divider` | Horizontal dividing line with center labels. | `label` (optional text). |
-
 ---
 
 ## Global Application State
 
 Application-wide state is managed using React Context and custom hooks.
 
-### 1. Store Architecture
-
-The state is split into two primary context providers located under `src/context/`:
-* **`AppProvider`**: Responsible for global UI settings (sidebar width mode, mobile drawers toggling), theme preferences, global loading flags, settings parameters, active page headers, and modal indicators.
-* **`NotificationProvider`**: Responsible for enqueuing and dequeuing toast banners with auto-dismiss timers.
-
 ---
 
 ## API Layer & Application Services
 
 Communication with the backend uses a custom, lightweight HTTP client built on standard browser APIs.
-
-### 1. API Environment Configuration
-
-The client reads properties from system environment variables (with defaults):
-* `VITE_API_BASE_URL` (Base backend URL, default: `http://localhost:8000`).
-* `VITE_API_TIMEOUT` (Request cancellation threshold in milliseconds, default: `10000`).
 
 ---
 
