@@ -53,3 +53,28 @@ class ValidationResultModel(BaseModel):
     class Config:
         populate_by_name = True
         populate_by_alias = True
+
+
+class AISuggestionModel(BaseModel):
+    id: str
+    category: str
+    severity: str
+    title: str
+    explanation: str
+    suggested_action: str | None = Field(default=None, alias="suggestedAction")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+class AIAssistantResponse(BaseModel):
+    status: str
+    summary: str
+    suggestions: list[AISuggestionModel]
+    execution_duration_ms: float = Field(..., alias="executionDurationMs")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+

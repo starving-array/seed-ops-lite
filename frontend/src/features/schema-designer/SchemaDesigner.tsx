@@ -10,6 +10,8 @@ import {
 } from '../../components/ui'
 import { useSchema } from '../../context/SchemaContext'
 import type { Table, Column, Relationship } from '../../context/SchemaContext'
+import { schemaService } from '../../services/schema'
+import type { AISuggestion } from '../../services/schema'
 
 export const SchemaGenerator = () => {
   const {
@@ -24,6 +26,61 @@ export const SchemaGenerator = () => {
 
   const [selectedTableId, setSelectedTableId] = useState<string>('1')
   const [tableSearch, setTableSearch] = useState<string>('')
+
+  // AI Schema Assistant state
+  const [aiStatus, setAiStatus] = useState<'waiting' | 'analyzing' | 'completed' | 'failed'>('waiting')
+  const [aiSummary, setAiSummary] = useState('')
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([])
+  const [aiExecutionTime, setAiExecutionTime] = useState(0)
+  const [aiErrorMessage, setAiErrorMessage] = useState('')
+  const [acceptedSuggestions, setAcceptedSuggestions] = useState<string[]>([])
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([])
+  const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
+
+  const handleAIAnalysis = async () => {
+    setAiStatus('analyzing')
+    setAiErrorMessage('')
+    setAcceptedSuggestions([])
+    setDismissedSuggestions([])
+
+    try {
+      const response = await schemaService.aiSchemaAssistant({
+        tables,
+        relationships,
+      })
+
+      if (response.success && response.data) {
+        if (response.data.status === 'Completed') {
+          setAiSuggestions(response.data.suggestions)
+          setAiSummary(response.data.summary)
+          setAiExecutionTime(response.data.executionDurationMs)
+          setAiStatus('completed')
+        } else {
+          setAiErrorMessage(response.data.summary || 'AI Analysis returned failed status.')
+          setAiStatus('failed')
+        }
+      } else {
+        setAiErrorMessage(response.error?.message || 'Failed to communicate with AI Assistant backend.')
+        setAiStatus('failed')
+      }
+    } catch (err: any) {
+      setAiErrorMessage(err.message || 'An unexpected error occurred during AI analysis.')
+      setAiStatus('failed')
+    }
+  }
+
+  const handleAcceptSuggestion = (id: string) => {
+    setAcceptedSuggestions((prev) => [...prev, id])
+  }
+
+  const handleDismissSuggestion = (id: string) => {
+    setDismissedSuggestions((prev) => [...prev, id])
+  }
+
+  const handleIgnoreSuggestion = (id: string) => {
+    setIgnoredSuggestions((prev) => [...prev, id])
+  }
 
   // New relationship form state
   const [newRelName, setNewRelName] = useState('')
@@ -893,6 +950,222 @@ export const SchemaGenerator = () => {
 
         {/* ==================== RIGHT PANEL: SCHEMA SUMMARY & DIAGNOSTICS ==================== */}
         <div className="lg:col-span-3 space-y-6">
+          {/* AI Schema Assistant Panel */}
+          <Card className="p-4 space-y-4 bg-slate-900/40 border-slate-800/80">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+              <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🤖</span> AI Assistant
+              </h2>
+              {aiStatus === 'completed' && (
+                <span className="text-[10px] text-slate-500 italic">
+                  ({aiExecutionTime.toFixed(0)}ms)
+                </span>
+              )}
+            </div>
+
+            {/* AI Assistant Status Cases */}
+            {aiStatus === 'waiting' && (
+              <div className="space-y-4 py-2">
+                <div className="text-xs text-slate-400 leading-relaxed text-center">
+                  Analyze your schema layout, table relationships, and naming standards to get design improvements.
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleAIAnalysis}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs"
+                >
+                  <span>🧠</span> Run AI Analysis
+                </Button>
+              </div>
+            )}
+
+            {aiStatus === 'analyzing' && (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <Spinner size="md" />
+                <span className="text-xs text-indigo-400 font-medium animate-pulse">
+                  Analyzing schema design...
+                </span>
+              </div>
+            )}
+
+            {aiStatus === 'failed' && (
+              <div className="space-y-4 py-2">
+                <Alert variant="error" title="Analysis Failed">
+                  {aiErrorMessage}
+                </Alert>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAIAnalysis}
+                  className="w-full text-xs"
+                >
+                  🔄 Retry Analysis
+                </Button>
+              </div>
+            )}
+
+            {aiStatus === 'completed' && (
+              <div className="space-y-4">
+                {/* Summary Text */}
+                <div className="text-xs text-slate-300 bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 leading-relaxed">
+                  {aiSummary}
+                </div>
+
+                {/* Categories Filter list */}
+                <div className="flex flex-wrap gap-1 border-b border-slate-800/40 pb-2">
+                  {['All', 'Naming', 'Relationships', 'Performance', 'Validation', 'Best Practices'].map((cat) => {
+                    const count = cat === 'All' 
+                      ? aiSuggestions.filter(s => !dismissedSuggestions.includes(s.id) && !ignoredSuggestions.includes(s.id)).length
+                      : aiSuggestions.filter(s => s.category === cat && !dismissedSuggestions.includes(s.id) && !ignoredSuggestions.includes(s.id)).length;
+                    
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`text-[10px] px-2 py-1 rounded-lg transition-all cursor-pointer font-medium
+                          ${selectedCategory === cat
+                            ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                            : 'bg-slate-950/40 text-slate-400 border border-transparent hover:text-slate-200'
+                          }
+                        `}
+                      >
+                        {cat} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Suggestions list */}
+                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                  {aiSuggestions
+                    .filter((s) => {
+                      if (dismissedSuggestions.includes(s.id)) return false;
+                      if (ignoredSuggestions.includes(s.id)) return false;
+                      if (selectedCategory !== 'All' && s.category !== selectedCategory) return false;
+                      return true;
+                    })
+                    .length === 0 ? (
+                      <div className="text-xs text-slate-500 text-center py-6">
+                        No active suggestions in this category.
+                      </div>
+                    ) : (
+                      aiSuggestions
+                        .filter((s) => {
+                          if (dismissedSuggestions.includes(s.id)) return false;
+                          if (ignoredSuggestions.includes(s.id)) return false;
+                          if (selectedCategory !== 'All' && s.category !== selectedCategory) return false;
+                          return true;
+                        })
+                        .map((s) => {
+                          const isAccepted = acceptedSuggestions.includes(s.id);
+                          
+                          // Badge color based on severity
+                          let severityBadge = (
+                            <span className="text-[9px] bg-slate-800 text-slate-400 py-0.5 px-2 rounded-full border border-slate-700/60 font-semibold uppercase">
+                              {s.severity}
+                            </span>
+                          );
+                          if (s.severity === 'high') {
+                            severityBadge = (
+                              <span className="text-[9px] bg-rose-950/30 text-rose-400 py-0.5 px-2 rounded-full border border-rose-500/20 font-bold uppercase">
+                                High
+                              </span>
+                            );
+                          } else if (s.severity === 'medium') {
+                            severityBadge = (
+                              <span className="text-[9px] bg-amber-950/30 text-amber-400 py-0.5 px-2 rounded-full border border-amber-500/20 font-bold uppercase">
+                                Medium
+                              </span>
+                            );
+                          } else if (s.severity === 'low') {
+                            severityBadge = (
+                              <span className="text-[9px] bg-blue-950/30 text-blue-400 py-0.5 px-2 rounded-full border border-blue-500/20 font-bold uppercase">
+                                Low
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={s.id}
+                              className={`p-3 rounded-xl border transition-all text-xs space-y-2.5
+                                ${isAccepted 
+                                  ? 'bg-emerald-950/10 border-emerald-500/20 opacity-90'
+                                  : 'bg-slate-950/30 border-slate-850/80 hover:border-slate-800'
+                                }
+                              `}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-slate-200 truncate" title={s.title}>
+                                  {s.title}
+                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-[9px] bg-slate-800/80 text-slate-400 py-0.5 px-1.5 rounded-md font-medium">
+                                    {s.category}
+                                  </span>
+                                  {severityBadge}
+                                </div>
+                              </div>
+
+                              <p className="text-slate-400 leading-relaxed text-[11px]">
+                                {s.explanation}
+                              </p>
+
+                              {s.suggestedAction && (
+                                <div className="p-2 bg-slate-950/50 rounded-lg border border-slate-850 border-dashed text-slate-300 text-[10px] leading-relaxed">
+                                  <span className="font-medium text-indigo-400">💡 Suggestion:</span> {s.suggestedAction}
+                                </div>
+                              )}
+
+                              {/* Interaction Action Buttons */}
+                              {isAccepted ? (
+                                <div className="text-[10px] text-emerald-400/90 font-medium bg-emerald-950/20 border border-emerald-500/10 p-1.5 rounded-lg text-center">
+                                  ✓ Recommendation Accepted (Apply Manually)
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 pt-1">
+                                  <button
+                                    onClick={() => handleAcceptSuggestion(s.id)}
+                                    className="flex-1 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 hover:border-indigo-500/40 rounded-lg py-1 px-2 transition-all cursor-pointer font-medium text-[10px] text-center"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={() => handleDismissSuggestion(s.id)}
+                                    className="bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border border-transparent rounded-lg py-1 px-2 transition-all cursor-pointer text-[10px] text-center"
+                                    title="Dismiss this suggestion for this run"
+                                  >
+                                    Dismiss
+                                  </button>
+                                  <button
+                                    onClick={() => handleIgnoreSuggestion(s.id)}
+                                    className="bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200 border border-transparent rounded-lg py-1 px-2 transition-all cursor-pointer text-[10px] text-center"
+                                    title="Ignore permanently (session only)"
+                                  >
+                                    Ignore
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                    )}
+                </div>
+
+                <Divider />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAIAnalysis}
+                  className="w-full text-xs py-1.5"
+                >
+                  🔄 Re-run Analysis
+                </Button>
+              </div>
+            )}
+          </Card>
+
           {/* Schema Summary Statistics */}
           <Card className="p-4 space-y-4 bg-slate-900/40 border-slate-800/80">
             <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">

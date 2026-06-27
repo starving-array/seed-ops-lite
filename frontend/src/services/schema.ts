@@ -42,4 +42,28 @@ export const schemaService = {
   }): Promise<ApiResponse<ValidationResult[]>> => {
     return apiClient.post<ValidationResult[]>('/schema/validate', schema)
   },
+
+  aiSchemaAssistant: async (schema: {
+    tables: Table[]
+    relationships: Relationship[]
+  }): Promise<ApiResponse<AIAssistantReport>> => {
+    return apiClient.post<AIAssistantReport>('/schema/ai-assist', schema)
+  },
 }
+
+export interface AISuggestion {
+  id: string
+  category: 'Naming' | 'Relationships' | 'Performance' | 'Validation' | 'Best Practices'
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  explanation: string
+  suggestedAction?: string
+}
+
+export interface AIAssistantReport {
+  status: 'Completed' | 'Failed'
+  summary: string
+  suggestions: AISuggestion[]
+  executionDurationMs: number
+}
+
