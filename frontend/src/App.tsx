@@ -21,6 +21,7 @@ import {
 } from './context/NotificationContext'
 import { Badge } from './components/ui'
 import { healthService } from './services/health'
+import { SchemaProvider } from './context/SchemaContext'
 import {
   Dashboard,
   Projects,
@@ -319,9 +320,11 @@ export default function App() {
   return (
     <AppProvider>
       <NotificationProvider>
-        <Router>
-          <AppContent />
-        </Router>
+        <SchemaProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </SchemaProvider>
       </NotificationProvider>
     </AppProvider>
   )

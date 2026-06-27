@@ -36,12 +36,7 @@ const PagePlaceholder = ({ title, description }: PageProps) => {
   )
 }
 
-export const SchemaValidation = () => (
-  <PagePlaceholder
-    title="Schema Validation"
-    description="Trigger multi-agent validation loops to ensure schema integrity and consistency checks."
-  />
-)
+export { SchemaValidation } from './features/schema-validation/SchemaValidation'
 
 export const DataGeneration = () => (
   <PagePlaceholder

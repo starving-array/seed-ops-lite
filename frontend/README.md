@@ -23,6 +23,11 @@ frontend/src/
 ├── api/             # Centralized HTTP request client and configuration loader
 ├── components/      # Reusable design system primitives, cards, and feedback components
 ├── context/         # Global application context stores and custom hooks
+├── features/        # Feature modules containing standalone pages and scopes
+│   ├── dashboard/   # Dashboard page components
+│   ├── projects/    # Projects Workspace page components
+│   ├── schema-designer/ # Schema Designer entity and columns modeler
+│   └── schema-validation/ # Relational integrity checker
 ├── services/        # Service client hooks querying backend endpoints
 ├── types/           # Global model interfaces and API response envelopes
 ├── utils/           # Shared utility tools (e.g., custom logging wrapper)
@@ -69,6 +74,23 @@ The **Schema Designer** (under `/schema-generator`) provides a functional worksp
   * **Left Panel**: Handles adding, searching, renaming, and deleting tables. List badge counters track total column sizes.
   * **Center Panel**: The selected table column manager. Supports field renaming, type picking (`INTEGER`, `VARCHAR`, `TEXT`, `FLOAT`, `BOOLEAN`, `TIMESTAMP`), toggling PK/Null tags, default value mappings, and a relationship section placeholder.
   * **Right Panel**: Renders real-time summary aggregates (tables, columns, primary keys, relationships) and warning notifications (missing keys, empty tables).
+
+---
+
+## Relationship Designer Overview
+
+The **Relationship Designer** (under `/schema-generator` center panel) configures relational links between tables:
+* **Properties**: Configuration dropdowns mapping source table, source column, target table, and target column.
+* **Validation Warnings**: Real-time warning diagnostics scan for duplicate linkages, missing key properties, and self-referencing loops.
+
+---
+
+## Schema Validation Overview
+
+The **Schema Validation Workspace** (under `/schema-validation`) runs real-time diagnostic checks on configured schemas:
+* **Validation Dashboard**: Tracks total checks, passed rate, design warnings, blocker errors, and calculates a live Validation Score rating out of 100%.
+* **Categories Sections**: Filters and groups validation items by Tables, Columns, Relationships, Naming, Constraints, and Data Types.
+* **Suggested Fixes Card**: Displays detailed suggested fixes for each failed validation rule.
 
 ---
 
