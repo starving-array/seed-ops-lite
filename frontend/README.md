@@ -25,6 +25,52 @@ The UI is structured around a responsive global application shell matching moder
 
 ---
 
+## Design System & Reusable Components
+
+All reusable UI primitives and styling tokens are established in [frontend/src/components/ui.tsx](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/frontend/src/components/ui.tsx).
+
+### 1. Theme Styling Tokens
+
+Theme color tokens are configured inside the Tailwind v4 `@theme` directive in `src/index.css`:
+* **Primary**: `#4f46e5` (Indigo brand color)
+* **Secondary**: `#64748b` (Slate slate color)
+* **Success**: `#10b981` (Emerald green)
+* **Warning**: `#f59e0b` (Amber yellow)
+* **Error**: `#ef4444` (Red error status)
+* **Neutral**: `#0f172a` (Deep slate background)
+* **Border Radius Scale**: `xl` (12px), `2xl` (16px), `3xl` (24px) for rounded components.
+
+### 2. UI Components & Variants
+
+| Component | Description | Available Variants / Properties |
+| :--- | :--- | :--- |
+| `Button` | Standard action button with keyboard focus targets. | `variant`: `primary`, `secondary`, `outline`, `ghost`, `danger`. `size`: `sm`, `md`, `lg`. |
+| `Card` | Glassmorphic background container. | `hoverable`: boolean (shadow/border hover transition). |
+| `Input` | Semantic text input with labels and error handlers. | `label`, `error`, default HTML input properties. |
+| `Textarea` | Responsive multi-line text container. | `label`, `error`, `rows`, default HTML properties. |
+| `Select` | Dropdown picker with styled arrows. | `label`, `error`, `options` array. |
+| `Checkbox` | Styled checkbox with select-none labels. | `label`, `error`, checked attributes. |
+| `Badge` | Colored text tag representing states. | `variant`: `info`, `success`, `warning`, `error`. |
+| `Alert` | Viewport notification alert card. | `variant`: `info`, `success`, `warning`, `error`, `title`, `onClose`. |
+| `Spinner` | Centered loading spinner animation. | `size`: `sm`, `md`, `lg`. |
+| `Divider` | Horizontal dividing line with center labels. | `label` (optional text). |
+
+### 3. Layout Helpers
+
+* `Container` – Max-width `7xl` layout centering helper.
+* `PageHeader` – Semantic page title header with custom sub-description spacing.
+* `Section` – Standard spacing utility for document blocks.
+* `Stack` – Flex-based layout. Supports `direction` (`col`, `row`) and `gap` (`sm`, `md`, `lg`).
+* `Grid` – CSS Grid wrapper. Supports `cols` (`1`, `2`, `3`, `4`) with automatic tablet/mobile scaling.
+
+### 4. System Feedback States
+
+* `EmptyState` – Displayed when no data is loaded. Includes illustration emojis, descriptions, and action trigger buttons.
+* `LoadingState` – Full-page spinning loader with animated text.
+* `ErrorState` – Card displaying error logs and retry CTA buttons.
+
+---
+
 ## Routing Guide
 
 Routing is managed client-side using `react-router-dom`. The following routes have been registered:
@@ -38,9 +84,8 @@ Routing is managed client-side using `react-router-dom`. The following routes ha
 | `/schema-validation` | **Schema Validation** | Semantic validation controller for multi-agent loops. |
 | `/data-generation` | **Data Generation** | Configuration and runner controls for synthetic data generation runs. |
 | `/export` | **Export** | Export compiler to target files (CSV, SQL, JSON). |
-| `/observability` | **Observability** | Telemetry logs, traces, and metrics console. |
+| `/about` | **About** | Platform version specs, metadata resources, and Design System playground. |
 | `/settings` | **Settings** | Application configurations and API settings. |
-| `/about` | **About** | Platform version specs and metadata resources. |
 | `*` | **NotFound (404)** | Error screen triggered on invalid view routes. |
 
 ---
