@@ -119,6 +119,37 @@ Configuration settings are loaded dynamically using **Pydantic v2 Settings** (`B
 
 ---
 
+## Export & Data Delivery Workflow
+
+The **Export & Data Delivery** module allows users to compile and download generated mock datasets.
+
+### 1. Supported Export Formats
+The system supports the following formats out-of-the-box:
+- **JSON**: Serializes table entities into a unified JSON document structure.
+- **CSV**: Compiles individual database tables into separate comma-separated values files.
+- **SQL**: Generates a clean script of SQL standard `INSERT` statements with proper string escaping.
+
+The design utilizes a **Registry Pattern** via `SerializerRegistry` allowing future serialization formats (e.g. Parquet, Excel) to be added without modifying the core export engine.
+
+### 2. Export Configuration Settings
+Through the UI, users can configure:
+- **Tables to Export**: Multi-select database entities to include in the output.
+- **File Consolidation**: Export as a single unified file or multiple separate files.
+- **ZIP Compression**: Pack final outputs into a compressed `.zip` archive.
+- **Schema Metadata**: Optionally include a `metadata.json` detailing row counts, formats, and export timestamps.
+- **Naming Conventions**: Define default naming conventions or timestamp-suffixed files.
+
+### 3. Job Lifecycle Integration
+All export operations run as background tasks and integrate directly with the **Job History** registry:
+- **Queued**: Export task is registered and scheduled.
+- **Running (Preparing)**: Retrieve generated datasets from Redis (`generation:{id}:records`).
+- **Running (Exporting)**: Serialize records using the designated format serializer.
+- **Running (Packaging)**: Package multiple files, zip-compress, or inject metadata.
+- **Completed**: Generate SHA-256 integrity checksums, store file payload in Redis, and transition status to complete.
+- **Failed**: Gracefully halt and log failure messages to the audit log details.
+
+---
+
 ## QA and Development
 
 To format and check code quality:

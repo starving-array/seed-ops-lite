@@ -332,3 +332,54 @@ async def test_cancel_job_from_history(client: AsyncClient) -> None:
     assert detail_resp.json()["status"] == "Cancelled"
 
 
+@pytest.mark.asyncio
+async def test_list_exportable_datasets(client: AsyncClient) -> None:
+    """Test listing completed datasets available for export."""
+    response = await client.get("/schema/export/datasets")
+    assert response.status_code == 200
+    datasets = response.json()
+    # Should return a list
+    assert isinstance(datasets, list)
+
+
+@pytest.mark.asyncio
+async def test_start_export_job(client: AsyncClient) -> None:
+    """Test initiating a background export job."""
+    # First, mock starting and completing a generation to have records
+    payload = {
+        "schemaState": {"tables": [], "relationships": []},
+        "rowTargets": {},
+    }
+    start_resp = await client.post("/schema/generate", json=payload)
+    assert start_resp.status_code == 200
+    workflow_id = start_resp.json()["workflowId"]
+
+    # Export request settings
+    export_payload = {
+        "workflowId": workflow_id,
+        "format": "json",
+        "tables": [],
+        "singleFile": True,
+        "compression": False,
+        "includeMetadata": False,
+        "fileNameConvention": "default",
+    }
+
+    # Start export
+    export_resp = await client.post("/schema/export", json=export_payload)
+    assert export_resp.status_code == 200
+    data = export_resp.json()
+    assert "jobId" in data
+    assert data["type"] == "export"
+    assert data["status"] in ("Queued", "Running", "Completed")
+
+
+@pytest.mark.asyncio
+async def test_download_exported_file_not_found(client: AsyncClient) -> None:
+    """Test download for missing export payload."""
+    response = await client.get("/schema/export/missing-export-id/download")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+

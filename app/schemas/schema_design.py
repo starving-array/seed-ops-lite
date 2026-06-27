@@ -137,4 +137,19 @@ class JobModel(BaseModel):
         populate_by_alias = True
 
 
+class ExportSettingsModel(BaseModel):
+    workflow_id: str = Field(..., alias="workflowId")
+    format: str
+    tables: list[str] = Field(default_factory=list)
+    single_file: bool = Field(default=True, alias="singleFile")
+    compression: bool = Field(default=False, alias="compression")
+    include_metadata: bool = Field(default=False, alias="includeMetadata")
+    file_name_convention: str = Field(default="default", alias="fileNameConvention")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+
 

@@ -94,6 +94,47 @@ class CSVSerializer(FormatSerializer):
         return serialized_outputs
 
 
+class SQLSerializer(FormatSerializer):
+    """Serializes dataset into a SQL INSERT statement document."""
+
+    def serialize(
+        self,
+        records: dict[str, list[dict[str, Any]]],
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, bytes]:
+        """Serialize as a SQL script containing INSERT statements.
+
+        Options supported:
+            - dialect: SQL dialect prefix (default: 'standard')
+        """
+        options = options or {}
+        sql_statements = []
+
+        for table_name, rows in records.items():
+            if not rows:
+                continue
+            for row in rows:
+                cols = ", ".join(row.keys())
+                vals = []
+                for val in row.values():
+                    if val is None:
+                        vals.append("NULL")
+                    elif isinstance(val, bool):
+                        vals.append("TRUE" if val else "FALSE")
+                    elif isinstance(val, int | float):
+                        vals.append(str(val))
+                    else:
+                        escaped_val = str(val).replace("'", "''")
+                        vals.append(f"'{escaped_val}'")
+                vals_str = ", ".join(vals)
+                sql_statements.append(
+                    f"INSERT INTO {table_name} ({cols}) VALUES ({vals_str});"  # noqa: S608
+                )
+
+        sql_content = "\n".join(sql_statements)
+        return {"dataset.sql": sql_content.encode("utf-8")}
+
+
 class SerializerRegistry:
     """Registry pattern keeping track of available export format serializers."""
 
@@ -121,3 +162,4 @@ class SerializerRegistry:
 # Auto-register default formats
 SerializerRegistry.register("json", JSONSerializer)
 SerializerRegistry.register("csv", CSVSerializer)
+SerializerRegistry.register("sql", SQLSerializer)

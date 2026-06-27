@@ -92,6 +92,14 @@ export const schemaService = {
   cancelJob: async (jobId: string): Promise<ApiResponse<{ status: string; message: string }>> => {
     return apiClient.post<{ status: string; message: string }>(`/schema/jobs/${jobId}/cancel`)
   },
+
+  listExportableDatasets: async (): Promise<ApiResponse<ExportableDataset[]>> => {
+    return apiClient.get<ExportableDataset[]>('/schema/export/datasets')
+  },
+
+  startExport: async (payload: ExportSettings): Promise<ApiResponse<Job>> => {
+    return apiClient.post<Job>('/schema/export', payload)
+  },
 }
 
 export interface AISuggestion {
@@ -144,6 +152,26 @@ export interface Job {
     [key: string]: any
   }
 }
+
+export interface ExportableDataset {
+  workflowId: string
+  startedAt: string
+  finishedAt: string
+  totalRowsGenerated: number
+  resultSummary: string
+  progress: TableProgress[]
+}
+
+export interface ExportSettings {
+  workflowId: string
+  format: 'csv' | 'json' | 'sql'
+  tables: string[]
+  singleFile: boolean
+  compression: boolean
+  includeMetadata: boolean
+  fileNameConvention: 'default' | 'timestamp'
+}
+
 
 
 

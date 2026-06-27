@@ -41,12 +41,7 @@ export { SchemaValidation } from './features/schema-validation/SchemaValidation'
 export { DataGeneration } from './features/data-generation/DataGeneration'
 export { JobHistory } from './features/job-history/JobHistory'
 
-export const Export = () => (
-  <PagePlaceholder
-    title="Export"
-    description="Export generated datasets to target files including CSV, SQL inserts, or JSON formats."
-  />
-)
+export { Export } from './features/export/Export'
 
 export const Observability = () => (
   <PagePlaceholder
