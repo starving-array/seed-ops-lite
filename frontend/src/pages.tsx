@@ -38,12 +38,7 @@ const PagePlaceholder = ({ title, description }: PageProps) => {
 
 export { SchemaValidation } from './features/schema-validation/SchemaValidation'
 
-export const DataGeneration = () => (
-  <PagePlaceholder
-    title="Data Generation"
-    description="Configure and execute parallel data generation runs with custom scaling constraints."
-  />
-)
+export { DataGeneration } from './features/data-generation/DataGeneration'
 
 export const Export = () => (
   <PagePlaceholder

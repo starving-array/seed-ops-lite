@@ -49,6 +49,24 @@ export const schemaService = {
   }): Promise<ApiResponse<AIAssistantReport>> => {
     return apiClient.post<AIAssistantReport>('/schema/ai-assist', schema)
   },
+
+  startGeneration: async (payload: {
+    schemaState: { tables: Table[]; relationships: Relationship[] }
+    rowTargets: Record<string, number>
+    seed?: number | null
+    batchSize: number
+    outputFormat: string
+  }): Promise<ApiResponse<GenerationResponse>> => {
+    return apiClient.post<GenerationResponse>('/schema/generate', payload)
+  },
+
+  getGenerationStatus: async (workflowId: string): Promise<ApiResponse<GenerationResponse>> => {
+    return apiClient.get<GenerationResponse>(`/schema/generate/${workflowId}`)
+  },
+
+  cancelGeneration: async (workflowId: string): Promise<ApiResponse<{ status: string; message: string }>> => {
+    return apiClient.post<{ status: string; message: string }>(`/schema/generate/${workflowId}/cancel`)
+  },
 }
 
 export interface AISuggestion {
@@ -66,4 +84,23 @@ export interface AIAssistantReport {
   suggestions: AISuggestion[]
   executionDurationMs: number
 }
+
+export interface TableProgress {
+  tableName: string
+  status: 'Pending' | 'Running' | 'Completed' | 'Failed'
+  rowsGenerated: number
+  targetRows: number
+  error?: string
+}
+
+export interface GenerationResponse {
+  workflowId: string
+  status: 'Queued' | 'Running' | 'Completed' | 'Failed'
+  progress: TableProgress[]
+  totalRowsGenerated: number
+  durationMs: number
+  errors: string[]
+  downloadPlaceholder?: string
+}
+
 

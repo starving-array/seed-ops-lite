@@ -78,3 +78,42 @@ class AIAssistantResponse(BaseModel):
         populate_by_name = True
         populate_by_alias = True
 
+
+class GenerateRequestModel(BaseModel):
+    schema_state: SchemaModel = Field(..., alias="schemaState")
+    row_targets: dict[str, int] = Field(..., alias="rowTargets")
+    seed: int | None = None
+    batch_size: int = Field(default=100, alias="batchSize")
+    output_format: str = Field(default="json", alias="outputFormat")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+class TableProgressModel(BaseModel):
+    table_name: str = Field(..., alias="tableName")
+    status: str
+    rows_generated: int = Field(..., alias="rowsGenerated")
+    target_rows: int = Field(..., alias="targetRows")
+    error: str | None = None
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+class GenerateResponseModel(BaseModel):
+    workflow_id: str = Field(..., alias="workflowId")
+    status: str
+    progress: list[TableProgressModel]
+    total_rows_generated: int = Field(..., alias="totalRowsGenerated")
+    duration_ms: float = Field(..., alias="durationMs")
+    errors: list[str]
+    download_placeholder: str | None = Field(default=None, alias="downloadPlaceholder")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+

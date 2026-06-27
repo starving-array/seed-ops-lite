@@ -3,13 +3,16 @@ import re
 from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.api.deps import get_redis
 from app.schemas.schema_design import (
     AIAssistantResponse,
     AISuggestionModel,
+    GenerateRequestModel,
+    GenerateResponseModel,
     SchemaModel,
+    TableProgressModel,
     ValidationResultModel,
 )
 
@@ -605,7 +608,6 @@ async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantResponse:
             suggestions=suggestions,
             executionDurationMs=round(duration_ms, 2),
         )
-
     except Exception as exc:
         duration_ms = (time.perf_counter() - start_time) * 1000.0
         return AIAssistantResponse(
@@ -614,3 +616,338 @@ async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantResponse:
             suggestions=[],
             executionDurationMs=round(duration_ms, 2),
         )
+
+
+async def run_generation_background(
+    workflow_id: str,
+    schema: SchemaModel,
+    row_targets: dict[str, int],
+    seed: int | None,
+    batch_size: int,
+    output_format: str,
+    db_client: RedisType,
+):
+    import asyncio
+    import json
+    import time
+
+    from app.seeder.models import SeedRequest
+    from app.seeder.seeder import HybridSeeder
+
+    start_time = time.perf_counter()
+    seeder = HybridSeeder()
+
+    table_map = {t.name: t for t in schema.tables}
+
+    try:
+        # Generate DDL to feed to GuardianPlanner for topological sort
+        ddl = generate_ddl_from_schema(schema)
+        from app.agents.schema_validation.models import SchemaValidationReport
+
+        report = SchemaValidationReport(
+            overall_status="pass",
+            summary="Pre-check passed",
+            findings=[],
+            recommendations=[],
+            warnings=[],
+            execution_statistics={},
+            executed_skills=[],
+            execution_duration_ms=0.0,
+        )
+        from app.agents.guardian.planner import GuardianPlanner
+
+        planner = GuardianPlanner()
+        plan_result = await planner.plan(ddl, report, row_targets)
+        ordered_tables = plan_result.ordered_tables
+    except Exception:
+        ordered_tables = [t.name for t in schema.tables]
+
+    progress_map = {
+        t_name: {
+            "tableName": t_name,
+            "status": "Pending",
+            "rowsGenerated": 0,
+            "targetRows": row_targets.get(t_name, 100),
+            "error": None,
+        }
+        for t_name in ordered_tables
+    }
+
+    status_dict = {
+        "workflowId": workflow_id,
+        "status": "Running",
+        "totalRowsGenerated": 0,
+        "durationMs": 0.0,
+        "errors": [],
+        "progress": list(progress_map.values()),
+        "downloadPlaceholder": None,
+        "startTime": start_time,
+    }
+    await db_client.set(
+        f"generation:{workflow_id}:status",
+        json.dumps(status_dict),
+    )
+
+    total_rows_generated_acc = 0
+    errors = []
+    generation_cancelled = False
+
+    try:
+        for t_name in ordered_tables:
+            # Check for cancellation
+            cancel_flag = await db_client.get(f"generation:{workflow_id}:cancel")
+            if cancel_flag and cancel_flag.decode("utf-8") == "true":
+                generation_cancelled = True
+                break
+
+            progress_map[t_name]["status"] = "Running"
+            status_dict["progress"] = list(progress_map.values())
+            status_dict["durationMs"] = round(
+                (time.perf_counter() - start_time) * 1000.0, 2
+            )
+            await db_client.set(
+                f"generation:{workflow_id}:status",
+                json.dumps(status_dict),
+            )
+
+            table_obj = table_map.get(t_name)
+            if not table_obj:
+                raise Exception(f"Table {t_name} not found in schema")
+
+            target_rows = row_targets.get(t_name, 100)
+
+            # Reconstruct FieldDefinitions
+            from app.cli.runner import map_column_to_field_def
+
+            fields = {}
+            for col in table_obj.columns:
+                fields[col.name] = map_column_to_field_def(
+                    col.name, col.type, col.is_primary_key
+                )
+
+            curr_batch_size = batch_size if batch_size > 0 else 100
+            rows_generated_for_table = 0
+
+            while rows_generated_for_table < target_rows:
+                # Check for cancellation inside batch loop
+                cancel_flag = await db_client.get(f"generation:{workflow_id}:cancel")
+                if cancel_flag and cancel_flag.decode("utf-8") == "true":
+                    generation_cancelled = True
+                    break
+
+                batch_limit = min(
+                    curr_batch_size, target_rows - rows_generated_for_table
+                )
+                seed_req = SeedRequest(
+                    target=t_name,
+                    num_records=batch_limit,
+                    fields=fields,
+                    seed=seed,
+                    strict=True,
+                )
+
+                seed_res = await seeder.seed(seed_req)
+                if not seed_res.success:
+                    raise Exception(
+                        f"Seeder failed to generate records for table {t_name}"
+                    )
+
+                rows_generated_for_table += batch_limit
+                total_rows_generated_acc += batch_limit
+
+                progress_map[t_name]["rowsGenerated"] = rows_generated_for_table
+                status_dict["totalRowsGenerated"] = total_rows_generated_acc
+                status_dict["progress"] = list(progress_map.values())
+                status_dict["durationMs"] = round(
+                    (time.perf_counter() - start_time) * 1000.0, 2
+                )
+                await db_client.set(
+                    f"generation:{workflow_id}:status",
+                    json.dumps(status_dict),
+                )
+
+                await asyncio.sleep(0.02)
+
+            if generation_cancelled:
+                break
+
+            progress_map[t_name]["status"] = "Completed"
+            status_dict["progress"] = list(progress_map.values())
+            await db_client.set(
+                f"generation:{workflow_id}:status",
+                json.dumps(status_dict),
+            )
+
+        if generation_cancelled:
+            for t_name in ordered_tables:
+                if progress_map[t_name]["status"] in ("Pending", "Running"):
+                    progress_map[t_name]["status"] = "Failed"
+                    progress_map[t_name]["error"] = (
+                        "Generation cancelled by user"
+                    )
+
+            status_dict["status"] = "Failed"
+            status_dict["errors"].append("Generation cancelled by user.")
+            status_dict["progress"] = list(progress_map.values())
+            status_dict["durationMs"] = round(
+                (time.perf_counter() - start_time) * 1000.0, 2
+            )
+            await db_client.set(
+                f"generation:{workflow_id}:status",
+                json.dumps(status_dict),
+            )
+        else:
+            status_dict["status"] = "Completed"
+            status_dict["downloadPlaceholder"] = (
+                f"/schema/generate/{workflow_id}/download"
+            )
+            status_dict["durationMs"] = round(
+                (time.perf_counter() - start_time) * 1000.0, 2
+            )
+            await db_client.set(
+                f"generation:{workflow_id}:status",
+                json.dumps(status_dict),
+            )
+
+    except Exception as e:
+        errors.append(str(e))
+        for t_name in ordered_tables:
+            if progress_map[t_name]["status"] in ("Pending", "Running"):
+                progress_map[t_name]["status"] = "Failed"
+                progress_map[t_name]["error"] = str(e)
+
+        status_dict["status"] = "Failed"
+        status_dict["errors"] = errors
+        status_dict["progress"] = list(progress_map.values())
+        status_dict["durationMs"] = round(
+            (time.perf_counter() - start_time) * 1000.0, 2
+        )
+        await db_client.set(
+            f"generation:{workflow_id}:status",
+            json.dumps(status_dict),
+        )
+
+
+@router.post("/generate", response_model=GenerateResponseModel)
+async def start_generation(
+    request: GenerateRequestModel,
+    background_tasks: BackgroundTasks,
+    db: RedisType = Depends(get_redis),
+) -> GenerateResponseModel:
+    """Starts synthetic data generation as a background workflow task."""
+    import json
+    import uuid
+
+    workflow_id = str(uuid.uuid4())
+
+    # Initialize Queued status in Redis
+    progress = [
+        TableProgressModel(
+            tableName=t.name,
+            status="Pending",
+            rowsGenerated=0,
+            targetRows=request.row_targets.get(t.name, 100),
+        )
+        for t in request.schema_state.tables
+    ]
+
+    initial_status = GenerateResponseModel(
+        workflowId=workflow_id,
+        status="Queued",
+        progress=progress,
+        totalRowsGenerated=0,
+        durationMs=0.0,
+        errors=[],
+    )
+
+    await db.set(
+        f"generation:{workflow_id}:status",
+        json.dumps(initial_status.model_dump(by_alias=True)),
+    )
+
+    # Run the generation background task
+    background_tasks.add_task(
+        run_generation_background,
+        workflow_id,
+        request.schema_state,
+        request.row_targets,
+        request.seed,
+        request.batch_size,
+        request.output_format,
+        db,
+    )
+
+    return initial_status
+
+
+@router.get("/generate/{workflow_id}", response_model=GenerateResponseModel)
+async def get_generation_status(
+    workflow_id: str,
+    db: RedisType = Depends(get_redis),
+) -> GenerateResponseModel:
+    """Retrieves progress and current status of an active or completed generation workflow."""
+    import json
+
+    status_bytes = await db.get(f"generation:{workflow_id}:status")
+    if not status_bytes:
+        raise HTTPException(
+            status_code=404, detail="Generation workflow session not found."
+        )
+
+    status_dict = json.loads(status_bytes.decode("utf-8"))
+
+    # Dynamically update duration_ms if it's still running
+    if status_dict.get("status") == "Running" and "startTime" in status_dict:
+        import time
+
+        elapsed = (time.perf_counter() - status_dict["startTime"]) * 1000.0
+        status_dict["durationMs"] = round(elapsed, 2)
+
+    return GenerateResponseModel(**status_dict)
+
+
+@router.post("/generate/{workflow_id}/cancel")
+async def cancel_generation(
+    workflow_id: str,
+    db: RedisType = Depends(get_redis),
+) -> dict[str, str]:
+    """Signals cancellation to an active synthetic data generation run."""
+    # Check if workflow exists
+    status_bytes = await db.get(f"generation:{workflow_id}:status")
+    if not status_bytes:
+        raise HTTPException(
+            status_code=404, detail="Generation workflow session not found."
+        )
+
+    # Write cancel flag
+    await db.set(f"generation:{workflow_id}:cancel", "true")
+    return {
+        "status": "success",
+        "message": "Cancellation signal sent successfully.",
+    }
+
+
+@router.get("/generate/{workflow_id}/download")
+async def download_generated_data(
+    workflow_id: str,
+    db: RedisType = Depends(get_redis),
+) -> dict[str, Any]:
+    """Download placeholder returning generated data stats."""
+    status_bytes = await db.get(f"generation:{workflow_id}:status")
+    if not status_bytes:
+        raise HTTPException(
+            status_code=404, detail="Generation workflow session not found."
+        )
+
+    import json
+
+    status_dict = json.loads(status_bytes.decode("utf-8"))
+    return {
+        "status": "success",
+        "message": "Synthetic dataset generation complete.",
+        "workflowId": workflow_id,
+        "totalRowsGenerated": status_dict.get("totalRowsGenerated", 0),
+        "durationMs": status_dict.get("durationMs", 0.0),
+        "data_format": "json",
+    }
+
