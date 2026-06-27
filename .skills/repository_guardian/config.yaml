@@ -1,0 +1,28 @@
+# Repository Guardian Skill configuration
+quality_checks:
+  ruff:
+    enabled: true
+    paths: ["app/", "tests/"]
+  black:
+    enabled: true
+    paths: ["app/", "tests/"]
+  mypy:
+    enabled: true
+    paths: ["app/"]
+  pytest:
+    enabled: true
+
+commit_rules:
+  conventional_commits_only: true
+  allowed_types:
+    - feat
+    - fix
+    - docs
+    - style
+    - refactor
+    - perf
+    - test
+    - build
+    - ci
+    - chore
+    - revert

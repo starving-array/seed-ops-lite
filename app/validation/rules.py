@@ -1,0 +1,22 @@
+"""Registry for deterministic validation rule IDs."""
+
+from enum import Enum
+
+
+class ValidationRule(str, Enum):
+    """Enumeration of deterministic validation rule IDs."""
+
+    GEN_SUCCESS = "RULE-GEN-01"
+    LEX_EMPTY_SCHEMA = "RULE-LEX-01"
+    LEX_UNMATCHED_PARENTHESIS = "RULE-LEX-02"
+    LEX_UNMATCHED_QUOTES = "RULE-LEX-03"
+    LEX_RESERVED_KEYWORD = "RULE-LEX-04"
+    SEC_FORBIDDEN_KEYWORD = "RULE-SEC-01"
+    SEC_SUSPICIOUS_COMMENT = "RULE-SEC-02"
+    SEC_STATEMENT_PREFIX = "RULE-SEC-03"
+    SEM_DUPLICATE_TABLE = "RULE-SEM-01"
+    SEM_DUPLICATE_COLUMN = "RULE-SEM-02"
+    SEM_MISSING_PRIMARY_KEY = "RULE-SEM-03"
+    SEM_RESERVED_KEYWORD = "RULE-SEM-04"
+    SEM_INVALID_FOREIGN_KEY = "RULE-SEM-05"
+    SEM_INVALID_ENUM = "RULE-SEM-06"

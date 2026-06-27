@@ -1,0 +1,15 @@
+name: best_practices
+version: 1.0.0
+description: Suggests database indexing strategies, maintainability, and design patterns
+owner: validation
+provider: Google
+model: gemini-1.5-pro
+temperature: 0.0
+max_output_tokens: 2048
+timeout_seconds: 30.0
+retry_count: 3
+expected_response: JSON containing is_valid, observations, and findings
+tags:
+  - validation
+  - performance
+  - indexing

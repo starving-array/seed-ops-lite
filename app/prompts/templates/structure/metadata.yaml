@@ -1,0 +1,15 @@
+name: structure
+version: 1.0.0
+description: Semantically reviews DDL table layout, organization, and completeness
+owner: validation
+provider: Google
+model: gemini-1.5-pro
+temperature: 0.0
+max_output_tokens: 2048
+timeout_seconds: 30.0
+retry_count: 3
+expected_response: JSON containing is_valid, table_count, observations, and findings
+tags:
+  - validation
+  - structure
+  - ddl

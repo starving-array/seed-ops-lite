@@ -1,0 +1,14 @@
+name: schema_validation_summary
+version: 1.0.0
+description: Generates an executive summary based on aggregated database schema findings.
+owner: airlock
+provider: Google
+model: gemini-1.5-pro
+temperature: 0.2
+max_output_tokens: 512
+expected_response: JSON containing the executive summary text.
+tags:
+  - schema_validation
+  - agent
+  - aggregator
+hash_algorithm: sha256
