@@ -43,6 +43,25 @@ The UI is structured around a responsive global application shell matching moder
 
 ---
 
+## Dashboard Overview
+
+The **Dashboard** is the principal operations center summarizing metrics and providing navigation links:
+* **Welcome Banner**: Dynamic card welcome layout listing software versions, env variables, and real-time backend API statuses.
+* **Quick Actions Toolbar**: Direct navigation button triggers to launch project pages, schema generators, validation checks, mock generators, and exports.
+* **Interactive Metrics**: Grid summaries compiling total database projects, verified schema counts, total generated synthetic rows, and templates.
+* **Status Diagnostics**: Lists database connectivity parameters, SQLite integrations, git quality gates, and merge conflict status details.
+
+---
+
+## Project Workspace Overview
+
+The **Project Workspace** manages custom database config files:
+* **In-Memory Adding**: Interactive Prompt workflow to configure new custom projects on the fly.
+* **Filters Toolbar**: Text query search boxes paired with toggle buttons to filter projects between `All`, `Verified`, and `Pending` flags.
+* **Empty State Cards**: Renders custom illustrations and CTA actions when query searches yield no matching items.
+
+---
+
 ## Design System & Reusable Components
 
 All reusable UI primitives and styling tokens are established in [frontend/src/components/ui.tsx](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/frontend/src/components/ui.tsx).
@@ -85,22 +104,6 @@ The state is split into two primary context providers located under `src/context
 * **`AppProvider`**: Responsible for global UI settings (sidebar width mode, mobile drawers toggling), theme preferences, global loading flags, settings parameters, active page headers, and modal indicators.
 * **`NotificationProvider`**: Responsible for enqueuing and dequeuing toast banners with auto-dismiss timers.
 
-### 2. Reusable State Hooks
-
-Custom hooks expose target scopes cleanly to React components:
-* `useTheme()` – Get current theme (`dark` | `light`) and switch themes.
-* `useSidebar()` – Toggle sidebar collapsed mode or mobile navigation drawer state.
-* `useLoading()` – Fetch global spinner status and toggles.
-* `useSettings()` – Read and modify custom app parameters (themePreference, reducedMotion).
-* `useNotifications()` – Add and dismiss toast notifications.
-* `useUIState()` – Manage page title definitions, modal views, and dialog layouts.
-* `useAppInfo()` – Read app compilation specifications (version, env).
-
-### 3. Persistence Strategy
-
-* App configurations and user preferences (`AppSettings`) are persisted inside the browser's `localStorage` (under the key `safeseedops_settings`) to preserve selections between sessions.
-* System theme matching is resolved on startup if the theme preference is set to `'system'`.
-
 ---
 
 ## API Layer & Application Services
@@ -112,15 +115,6 @@ Communication with the backend uses a custom, lightweight HTTP client built on s
 The client reads properties from system environment variables (with defaults):
 * `VITE_API_BASE_URL` (Base backend URL, default: `http://localhost:8000`).
 * `VITE_API_TIMEOUT` (Request cancellation threshold in milliseconds, default: `10000`).
-
-### 2. Error Normalization Matrix
-
-All failures are normalized into a unified interface `ApiError` mapping these primary codes:
-* `NETWORK_ERROR` – Triggered if connection is unavailable or host name resolution fails.
-* `TIMEOUT` – Triggered if response duration exceeds the defined timeout threshold.
-* `VALIDATION_ERROR` – Triggered on 422 HTTP responses (extracts validation error details).
-* `SERVER_ERROR` – Triggered on status code >= 500 backend exceptions.
-* `UNEXPECTED_ERROR` – Fallback error catch.
 
 ---
 
