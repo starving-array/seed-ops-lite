@@ -28,6 +28,7 @@ import {
   SchemaGenerator,
   SchemaValidation,
   DataGeneration,
+  JobHistory,
   Export,
   Observability,
   Settings,
@@ -41,6 +42,7 @@ const navItems = [
   { path: '/schema-generator', label: 'Schema Generator', icon: '🛠️' },
   { path: '/schema-validation', label: 'Schema Validation', icon: '🛡️' },
   { path: '/data-generation', label: 'Data Generation', icon: '⚙️' },
+  { path: '/job-history', label: 'Job History', icon: '⏱️' },
   { path: '/export', label: 'Export', icon: '📥' },
   { path: '/observability', label: 'Observability', icon: '📈' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },
@@ -286,6 +288,7 @@ function AppContent() {
                 element={<SchemaValidation />}
               />
               <Route path="/data-generation" element={<DataGeneration />} />
+              <Route path="/job-history" element={<JobHistory />} />
               <Route path="/export" element={<Export />} />
               <Route path="/observability" element={<Observability />} />
               <Route path="/settings" element={<Settings />} />

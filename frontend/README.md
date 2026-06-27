@@ -94,6 +94,22 @@ The **Schema Validation Workspace** (under `/schema-validation`) runs real-time 
 
 ---
 
+## Job History & Lifecycle Overview
+
+The **Job History Workspace** (under `/job-history`) manages and audits long-running operations:
+* **Job States**:
+  * `Queued`: Operation is queued and scheduled in the background queue.
+  * `Running`: Operation is actively executing (e.g. topological seeding).
+  * `Completed`: Generation completed successfully.
+  * `Failed`: Operation halted on an execution error.
+  * `Cancelled`: Manually terminated by the user.
+* **Details Inspections**:
+  * Selecting any job entry displays its timeline, duration, metrics, owner, and individual table generation status.
+  * An interactive console displays real-time **Workflow Execution Traces** (system logs).
+  * Running operations can be cancelled at any point, halting background execution and transitioning the job state gracefully.
+
+---
+
 ## Design System & Reusable Components
 
 All reusable UI primitives and styling tokens are established in [frontend/src/components/ui.tsx](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/frontend/src/components/ui.tsx).
@@ -124,6 +140,7 @@ Routing is managed client-side using `react-router-dom`. The following routes ha
 | `/schema-generator` | **Schema Generator** | Visual relational database table modeler. |
 | `/schema-validation` | **Schema Validation** | Semantic validation controller for multi-agent loops. |
 | `/data-generation` | **Data Generation** | Configuration and runner controls for synthetic data generation runs. |
+| `/job-history` | **Job History** | Unified execution logs and active progress monitoring panel. |
 | `/export` | **Export** | Export compiler to target files (CSV, SQL, JSON). |
 | `/about` | **About** | Platform version specs, metadata resources, and Design System playground. |
 | `/settings` | **Settings** | Application configurations and API settings. |

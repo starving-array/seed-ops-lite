@@ -39,6 +39,7 @@ const PagePlaceholder = ({ title, description }: PageProps) => {
 export { SchemaValidation } from './features/schema-validation/SchemaValidation'
 
 export { DataGeneration } from './features/data-generation/DataGeneration'
+export { JobHistory } from './features/job-history/JobHistory'
 
 export const Export = () => (
   <PagePlaceholder

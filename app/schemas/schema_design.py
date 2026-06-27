@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -115,5 +117,24 @@ class GenerateResponseModel(BaseModel):
     class Config:
         populate_by_name = True
         populate_by_alias = True
+
+
+class JobModel(BaseModel):
+    job_id: str = Field(..., alias="jobId")
+    type: str
+    status: str
+    started_at: str = Field(..., alias="startedAt")
+    finished_at: str | None = Field(default=None, alias="finishedAt")
+    duration: float = 0.0
+    progress: float = 0.0
+    owner: str = Field(default="admin", alias="owner")
+    result_summary: str | None = Field(default=None, alias="resultSummary")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    details: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
 
 

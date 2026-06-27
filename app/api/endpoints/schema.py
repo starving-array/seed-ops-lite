@@ -11,6 +11,7 @@ from app.schemas.schema_design import (
     AISuggestionModel,
     GenerateRequestModel,
     GenerateResponseModel,
+    JobModel,
     SchemaModel,
     TableProgressModel,
     ValidationResultModel,
@@ -618,6 +619,58 @@ async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantResponse:
         )
 
 
+async def update_job(
+    db_client: RedisType,
+    job_id: str,
+    job_type: str = "generation",
+    status: str = "Queued",
+    progress: float = 0.0,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+    duration: float = 0.0,
+    result_summary: str | None = None,
+    error_message: str | None = None,
+    details: dict[str, Any] | None = None,
+):
+    import json
+    from datetime import datetime
+
+    job_key = f"jobs:{job_id}"
+    existing_bytes = await db_client.get(job_key)
+    if existing_bytes:
+        job_dict = json.loads(existing_bytes.decode("utf-8"))
+    else:
+        job_dict = {
+            "jobId": job_id,
+            "type": job_type,
+            "status": status,
+            "startedAt": started_at or datetime.utcnow().isoformat() + "Z",
+            "finishedAt": None,
+            "duration": 0.0,
+            "progress": 0.0,
+            "owner": "admin",
+            "resultSummary": None,
+            "errorMessage": None,
+            "details": {},
+        }
+        await db_client.sadd("jobs:all_ids", job_id)
+
+    job_dict["status"] = status
+    job_dict["progress"] = round(progress, 2)
+    job_dict["duration"] = round(duration, 2)
+
+    if finished_at:
+        job_dict["finishedAt"] = finished_at
+    if result_summary is not None:
+        job_dict["resultSummary"] = result_summary
+    if error_message is not None:
+        job_dict["errorMessage"] = error_message
+    if details is not None:
+        job_dict["details"] = details
+
+    await db_client.set(job_key, json.dumps(job_dict))
+
+
 async def run_generation_background(
     workflow_id: str,
     schema: SchemaModel,
@@ -630,6 +683,7 @@ async def run_generation_background(
     import asyncio
     import json
     import time
+    from datetime import datetime
 
     from app.seeder.models import SeedRequest
     from app.seeder.seeder import HybridSeeder
@@ -688,7 +742,17 @@ async def run_generation_background(
         json.dumps(status_dict),
     )
 
+    # Move Job status to Running
+    await update_job(
+        db_client,
+        job_id=workflow_id,
+        status="Running",
+        progress=0.0,
+        details={"progress": list(progress_map.values())},
+    )
+
     total_rows_generated_acc = 0
+    total_records_to_generate = sum(row_targets.get(t, 100) for t in ordered_tables)
     errors = []
     generation_cancelled = False
 
@@ -755,15 +819,31 @@ async def run_generation_background(
                 rows_generated_for_table += batch_limit
                 total_rows_generated_acc += batch_limit
 
+                pct = (
+                    (total_rows_generated_acc / total_records_to_generate)
+                    * 100.0
+                    if total_records_to_generate > 0
+                    else 0.0
+                )
+                elapsed = time.perf_counter() - start_time
+
                 progress_map[t_name]["rowsGenerated"] = rows_generated_for_table
                 status_dict["totalRowsGenerated"] = total_rows_generated_acc
                 status_dict["progress"] = list(progress_map.values())
-                status_dict["durationMs"] = round(
-                    (time.perf_counter() - start_time) * 1000.0, 2
-                )
+                status_dict["durationMs"] = round(elapsed * 1000.0, 2)
                 await db_client.set(
                     f"generation:{workflow_id}:status",
                     json.dumps(status_dict),
+                )
+
+                # Update Job progress
+                await update_job(
+                    db_client,
+                    job_id=workflow_id,
+                    status="Running",
+                    progress=pct,
+                    duration=elapsed,
+                    details={"progress": list(progress_map.values())},
                 )
 
                 await asyncio.sleep(0.02)
@@ -796,6 +876,24 @@ async def run_generation_background(
                 f"generation:{workflow_id}:status",
                 json.dumps(status_dict),
             )
+
+            # Move Job to Cancelled
+            pct = (
+                (total_rows_generated_acc / total_records_to_generate) * 100.0
+                if total_records_to_generate > 0
+                else 0.0
+            )
+            elapsed = time.perf_counter() - start_time
+            await update_job(
+                db_client,
+                job_id=workflow_id,
+                status="Cancelled",
+                progress=pct,
+                duration=elapsed,
+                finished_at=datetime.utcnow().isoformat() + "Z",
+                result_summary="Generation cancelled by user.",
+                details={"progress": list(progress_map.values())},
+            )
         else:
             status_dict["status"] = "Completed"
             status_dict["downloadPlaceholder"] = (
@@ -807,6 +905,19 @@ async def run_generation_background(
             await db_client.set(
                 f"generation:{workflow_id}:status",
                 json.dumps(status_dict),
+            )
+
+            # Move Job to Completed
+            elapsed = time.perf_counter() - start_time
+            await update_job(
+                db_client,
+                job_id=workflow_id,
+                status="Completed",
+                progress=100.0,
+                duration=elapsed,
+                finished_at=datetime.utcnow().isoformat() + "Z",
+                result_summary=f"Successfully generated {total_rows_generated_acc} rows.",
+                details={"progress": list(progress_map.values())},
             )
 
     except Exception as e:
@@ -827,6 +938,25 @@ async def run_generation_background(
             json.dumps(status_dict),
         )
 
+        # Move Job to Failed
+        pct = (
+            (total_rows_generated_acc / total_records_to_generate) * 100.0
+            if total_records_to_generate > 0
+            else 0.0
+        )
+        elapsed = time.perf_counter() - start_time
+        await update_job(
+            db_client,
+            job_id=workflow_id,
+            status="Failed",
+            progress=pct,
+            duration=elapsed,
+            finished_at=datetime.utcnow().isoformat() + "Z",
+            error_message=str(e),
+            result_summary=f"Generation failed: {str(e)}",
+            details={"progress": list(progress_map.values())},
+        )
+
 
 @router.post("/generate", response_model=GenerateResponseModel)
 async def start_generation(
@@ -837,6 +967,7 @@ async def start_generation(
     """Starts synthetic data generation as a background workflow task."""
     import json
     import uuid
+    from datetime import datetime
 
     workflow_id = str(uuid.uuid4())
 
@@ -863,6 +994,17 @@ async def start_generation(
     await db.set(
         f"generation:{workflow_id}:status",
         json.dumps(initial_status.model_dump(by_alias=True)),
+    )
+
+    # Initialize Job in history as Queued
+    await update_job(
+        db,
+        job_id=workflow_id,
+        job_type="generation",
+        status="Queued",
+        progress=0.0,
+        started_at=datetime.utcnow().isoformat() + "Z",
+        result_summary="Scheduled synthetic data generation.",
     )
 
     # Run the generation background task
@@ -912,6 +1054,8 @@ async def cancel_generation(
     db: RedisType = Depends(get_redis),
 ) -> dict[str, str]:
     """Signals cancellation to an active synthetic data generation run."""
+    from datetime import datetime
+
     # Check if workflow exists
     status_bytes = await db.get(f"generation:{workflow_id}:status")
     if not status_bytes:
@@ -921,6 +1065,16 @@ async def cancel_generation(
 
     # Write cancel flag
     await db.set(f"generation:{workflow_id}:cancel", "true")
+
+    # Update Job immediately to Cancelled
+    await update_job(
+        db,
+        job_id=workflow_id,
+        status="Cancelled",
+        finished_at=datetime.utcnow().isoformat() + "Z",
+        result_summary="Generation cancelled by user.",
+    )
+
     return {
         "status": "success",
         "message": "Cancellation signal sent successfully.",
@@ -950,4 +1104,73 @@ async def download_generated_data(
         "durationMs": status_dict.get("durationMs", 0.0),
         "data_format": "json",
     }
+
+
+@router.get("/jobs", response_model=list[JobModel])
+async def list_jobs(
+    status: str | None = None,
+    job_type: str | None = None,
+    search: str | None = None,
+    db: RedisType = Depends(get_redis),
+) -> list[JobModel]:
+    """Lists all historical and active background jobs, optionally applying filters."""
+    import json
+
+    job_ids_bytes = await db.smembers("jobs:all_ids")
+    job_ids = (
+        [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
+    )
+
+    jobs = []
+    for j_id in job_ids:
+        job_bytes = await db.get(f"jobs:{j_id}")
+        if job_bytes:
+            job_dict = json.loads(job_bytes.decode("utf-8"))
+
+            # Apply filters
+            if status and job_dict.get("status", "").lower() != status.lower():
+                continue
+            if job_type and job_dict.get("type", "").lower() != job_type.lower():
+                continue
+            if search:
+                search_lower = search.lower()
+                id_match = search_lower in job_dict.get("jobId", "").lower()
+                type_match = search_lower in job_dict.get("type", "").lower()
+                if not (id_match or type_match):
+                    continue
+
+            jobs.append(JobModel(**job_dict))
+
+    # Sort jobs by startedAt descending
+    jobs.sort(key=lambda x: x.started_at, reverse=True)
+    return jobs
+
+
+@router.get("/jobs/{job_id}", response_model=JobModel)
+async def get_job_details(
+    job_id: str,
+    db: RedisType = Depends(get_redis),
+) -> JobModel:
+    """Retrieves full details of a specific operation job."""
+    import json
+
+    job_bytes = await db.get(f"jobs:{job_id}")
+    if not job_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job session {job_id} not found.",
+        )
+
+    job_dict = json.loads(job_bytes.decode("utf-8"))
+    return JobModel(**job_dict)
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job_from_history(
+    job_id: str,
+    db: RedisType = Depends(get_redis),
+) -> dict[str, str]:
+    """Cancels a running job directly from the history view."""
+    return await cancel_generation(workflow_id=job_id, db=db)
+
 

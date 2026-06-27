@@ -26,8 +26,22 @@ def override_redis(app: FastAPI) -> Any:
         )
         return True
 
+    async def mock_sadd(key: str, member: str) -> int:
+        if key not in store:
+            store[key] = set()
+        store[key].add(member)
+        return 1
+
+    async def mock_smembers(key: str) -> set[bytes]:
+        val = store.get(key, set())
+        return {
+            m.encode("utf-8") if isinstance(m, str) else m for m in val
+        }
+
     mock_redis.get = mock_get
     mock_redis.set = mock_set
+    mock_redis.sadd = mock_sadd
+    mock_redis.smembers = mock_smembers
 
     from app.api.deps import get_redis
 
@@ -244,4 +258,77 @@ async def test_download_generated_data(client: AsyncClient) -> None:
     assert download_resp.status_code == 200
     assert download_resp.json()["status"] == "success"
     assert download_resp.json()["workflowId"] == workflow_id
+
+
+@pytest.mark.asyncio
+async def test_list_jobs(client: AsyncClient) -> None:
+    """Test retrieving historical and active background jobs."""
+    # Create a job first by starting generation
+    payload = {
+        "schemaState": {"tables": [], "relationships": []},
+        "rowTargets": {},
+    }
+    start_resp = await client.post("/schema/generate", json=payload)
+    assert start_resp.status_code == 200
+    workflow_id = start_resp.json()["workflowId"]
+
+    # Get job history list
+    list_resp = await client.get("/schema/jobs")
+    assert list_resp.status_code == 200
+    jobs = list_resp.json()
+    assert len(jobs) >= 1
+
+    # Verify the created job exists in history
+    our_job = next(j for j in jobs if j["jobId"] == workflow_id)
+    assert our_job["status"] in ("Queued", "Completed")
+    assert our_job["type"] == "generation"
+
+    # Test filtering by status
+    curr_status = our_job["status"]
+    filter_resp = await client.get(f"/schema/jobs?status={curr_status}")
+    assert filter_resp.status_code == 200
+    assert any(j["jobId"] == workflow_id for j in filter_resp.json())
+
+    other_status = "Failed" if curr_status != "Failed" else "Queued"
+    filter_none_resp = await client.get(f"/schema/jobs?status={other_status}")
+    assert filter_none_resp.status_code == 200
+    assert not any(j["jobId"] == workflow_id for j in filter_none_resp.json())
+
+
+@pytest.mark.asyncio
+async def test_get_job_details(client: AsyncClient) -> None:
+    """Test retrieving job details by ID."""
+    payload = {
+        "schemaState": {"tables": [], "relationships": []},
+        "rowTargets": {},
+    }
+    start_resp = await client.post("/schema/generate", json=payload)
+    workflow_id = start_resp.json()["workflowId"]
+
+    detail_resp = await client.get(f"/schema/jobs/{workflow_id}")
+    assert detail_resp.status_code == 200
+    data = detail_resp.json()
+    assert data["jobId"] == workflow_id
+    assert data["status"] in ("Queued", "Completed")
+    assert data["type"] == "generation"
+
+
+@pytest.mark.asyncio
+async def test_cancel_job_from_history(client: AsyncClient) -> None:
+    """Test cancelling a job directly from job history."""
+    payload = {
+        "schemaState": {"tables": [], "relationships": []},
+        "rowTargets": {},
+    }
+    start_resp = await client.post("/schema/generate", json=payload)
+    workflow_id = start_resp.json()["workflowId"]
+
+    cancel_resp = await client.post(f"/schema/jobs/{workflow_id}/cancel")
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["status"] == "success"
+
+    # Verify job status transitioned to Cancelled
+    detail_resp = await client.get(f"/schema/jobs/{workflow_id}")
+    assert detail_resp.json()["status"] == "Cancelled"
+
 

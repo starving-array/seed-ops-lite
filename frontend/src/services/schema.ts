@@ -67,6 +67,31 @@ export const schemaService = {
   cancelGeneration: async (workflowId: string): Promise<ApiResponse<{ status: string; message: string }>> => {
     return apiClient.post<{ status: string; message: string }>(`/schema/generate/${workflowId}/cancel`)
   },
+
+  listJobs: async (filters?: {
+    status?: string
+    job_type?: string
+    search?: string
+  }): Promise<ApiResponse<Job[]>> => {
+    let query = ''
+    if (filters) {
+      const params = new URLSearchParams()
+      if (filters.status) params.append('status', filters.status)
+      if (filters.job_type) params.append('job_type', filters.job_type)
+      if (filters.search) params.append('search', filters.search)
+      const qStr = params.toString()
+      if (qStr) query = `?${qStr}`
+    }
+    return apiClient.get<Job[]>(`/schema/jobs${query}`)
+  },
+
+  getJobDetails: async (jobId: string): Promise<ApiResponse<Job>> => {
+    return apiClient.get<Job>(`/schema/jobs/${jobId}`)
+  },
+
+  cancelJob: async (jobId: string): Promise<ApiResponse<{ status: string; message: string }>> => {
+    return apiClient.post<{ status: string; message: string }>(`/schema/jobs/${jobId}/cancel`)
+  },
 }
 
 export interface AISuggestion {
@@ -102,5 +127,23 @@ export interface GenerationResponse {
   errors: string[]
   downloadPlaceholder?: string
 }
+
+export interface Job {
+  jobId: string
+  type: string
+  status: 'Queued' | 'Running' | 'Completed' | 'Failed' | 'Cancelled'
+  startedAt: string
+  finishedAt?: string | null
+  duration: number
+  progress: number
+  owner: string
+  resultSummary?: string | null
+  errorMessage?: string | null
+  details: {
+    progress?: TableProgress[]
+    [key: string]: any
+  }
+}
+
 
 
