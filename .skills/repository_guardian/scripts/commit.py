@@ -9,9 +9,14 @@ import sys
 from git_helpers import (
     create_commit,
     get_git_status_short,
+    get_repo_root,
     stage_files,
 )
-from quality_check import execute_quality_checks
+from verification import (
+    get_git_head,
+    get_tracked_changes_state,
+    read_verification_stamp,
+)
 
 
 def validate_conventional_commit(msg: str) -> bool:
@@ -77,13 +82,36 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # 1. Run Quality Checks
-    print("Running quality gates...")
-    success, failures = execute_quality_checks()
-    if not success:
-        print("Commit aborted due to quality check failures:", file=sys.stderr)
-        for fail in failures:
-            print(f"- {fail}", file=sys.stderr)
+    # 1. Read and Validate Verification Stamp
+    repo_root = get_repo_root()
+    stamp = read_verification_stamp(repo_root)
+
+    if stamp is None:
+        print("Repository verification not found.")
+        print("\nRun:\n")
+        print("  uv run seed status\n")
+        print("before committing.")
+        sys.exit(1)
+
+    if not stamp.get("healthy"):
+        print("Repository is not verified.")
+        print("\nRun:\n")
+        print("  uv run seed status\n")
+        print("after fixing the repository.")
+        sys.exit(1)
+
+    # Validate stored Git HEAD and tracked changes state
+    current_head = get_git_head(repo_root)
+    stored_head = stamp.get("git_head")
+    current_changes = get_tracked_changes_state(repo_root)
+    stored_changes = stamp.get("tracked_changes", {})
+
+    if stored_head != current_head or current_changes != stored_changes:
+        print("Repository verification is no longer valid.")
+        print("\nThe repository has changed since the last successful verification.\n")
+        print("Run:\n")
+        print("  uv run seed status\n")
+        print("before committing.")
         sys.exit(1)
 
     # 2. Determine Commit Message

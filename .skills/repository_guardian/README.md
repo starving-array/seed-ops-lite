@@ -56,3 +56,9 @@ Freeze a development phase and tag it using Seed Freeze:
 ```bash
 seed freeze -p 10
 ```
+
+## Runtime Verification Stamp
+
+The Repository Guardian uses a local directory `.seed/` containing `verification.json` to store the verification stamp.
+* **Local runtime metadata**: `.seed/` contains local runtime verification stamps that must never be committed. It is intentionally excluded from Git in `.gitignore`.
+* **Zero personal information**: The stamp stores only the health status, tool name, current Git HEAD, a UTC timestamp, and format schema version. It never stores absolute paths, usernames, or machine-specific filesystem information.

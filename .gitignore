@@ -70,6 +70,7 @@ keys/
 .pytype/
 .dmypy.json
 dmypy.json
+.seed/
 
 # ============================================================================
 # Coverage / Testing

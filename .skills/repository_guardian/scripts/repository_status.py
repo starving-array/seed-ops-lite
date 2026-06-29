@@ -13,6 +13,10 @@ from git_helpers import (
     is_git_repository,
 )
 from quality_check import get_venv_tool, run_command
+from verification import (
+    invalidate_verification_stamp,
+    write_verification_stamp,
+)
 
 
 def main() -> None:
@@ -32,6 +36,8 @@ def main() -> None:
     # Git Repository Verification
     if not is_git_repository():
         print("Status:  Failed (Not a Git repository)", file=sys.stderr)
+        invalidate_verification_stamp(root)
+        print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
         sys.exit(1)
     print("Status:  Passed (Git repository detected)")
 
@@ -52,6 +58,8 @@ def main() -> None:
             file=sys.stderr,
         )
         print("Please resolve conflicts before making commits.", file=sys.stderr)
+        invalidate_verification_stamp(root)
+        print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
         sys.exit(1)
     print("Merge Conflicts:  Passed (None detected)")
 
@@ -73,6 +81,8 @@ def main() -> None:
                 "Secret Scan:      Failed (.env file is NOT ignored in .gitignore!)",
                 file=sys.stderr,
             )
+            invalidate_verification_stamp(root)
+            print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
             sys.exit(1)
     else:
         print("Secret Scan:      Passed (No local .env file found)")
@@ -116,6 +126,8 @@ def main() -> None:
                 print(f"STDERR:\n{stderr}", file=sys.stderr)
             print("\n--- [Summary] ---")
             print("Seed Status:  Failed (Quality gate aborted)", file=sys.stderr)
+            invalidate_verification_stamp(root)
+            print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
             sys.exit(1)
 
     # --------------------------------------------------
@@ -124,6 +136,8 @@ def main() -> None:
     print("\n--- [Summary] ---")
     print("Seed Status:  Passed (HEALTHY - All checks pass)")
     print("==================================================")
+    write_verification_stamp(root)
+    print("\nRepository Status: HEALTHY\n\nVerification stamp created.")
     sys.exit(0)
 
 
