@@ -300,3 +300,84 @@ def test_commit_fails_when_outdated_or_changed(
     captured = capsys.readouterr()
     assert "Repository verification is no longer valid." in captured.out
     assert "uv run seed status" in captured.out
+
+
+def test_security_audit_api() -> None:
+    """Verify that security_audit loads and run_security_audit returns a valid result."""
+    import security_audit
+
+    with (
+        patch("security_audit.get_repo_files", return_value=[]),
+        patch("security_audit.is_file_ignored", return_value=True),
+    ):
+        result = security_audit.run_security_audit()
+    assert result.success is True
+    assert "No secrets detected" in result.message
+    assert isinstance(result.details, list)
+
+
+def test_repository_status_calls_security_audit(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify that repository_status imports and runs the security audit module."""
+    import repository_status
+    import security_audit
+
+    fake_result = security_audit.SecurityAuditResult(
+        success=True,
+        message="Mock security audit passed",
+        details=["detail 1", "detail 2"],
+    )
+
+    with (
+        patch("repository_status.is_git_repository", return_value=True),
+        patch("repository_status.get_git_status", return_value="clean"),
+        patch(
+            "security_audit.run_security_audit", return_value=fake_result
+        ) as mock_audit,
+        patch("repository_status.write_verification_stamp"),
+        patch("repository_status.run_command", return_value=(True, "", "")),
+        patch("sys.argv", ["status"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        repository_status.main()
+
+    assert exc.value.code == 0
+    mock_audit.assert_called_once()
+    captured = capsys.readouterr()
+    assert "Mock security audit passed" in captured.out
+    assert "detail 1" in captured.out
+    assert "detail 2" in captured.out
+
+
+def test_repository_status_security_audit_fails(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify that repository_status handles security audit failures correctly."""
+    import repository_status
+    import security_audit
+
+    fake_result = security_audit.SecurityAuditResult(
+        success=False,
+        message="Mock security audit failed",
+        details=["vulnerability found"],
+    )
+
+    with (
+        patch("repository_status.is_git_repository", return_value=True),
+        patch("repository_status.get_git_status", return_value="clean"),
+        patch(
+            "security_audit.run_security_audit", return_value=fake_result
+        ) as mock_audit,
+        patch("repository_status.invalidate_verification_stamp"),
+        patch("sys.argv", ["status"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        repository_status.main()
+
+    assert exc.value.code == 1
+    mock_audit.assert_called_once()
+    captured = capsys.readouterr()
+    assert "Mock security audit failed" in captured.out
+    assert "vulnerability found" in captured.out
+    assert "Security audit failed" in captured.err

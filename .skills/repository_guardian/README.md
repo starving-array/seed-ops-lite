@@ -84,3 +84,53 @@ To ensure only verified code reaches the repository, developers should follow th
    ```bash
    uv run seed commit
    ```
+
+## Security Quality Gate
+
+The Security Quality Gate executes modular audits to protect the repository from accidental secrets exposure, repository hygiene regressions, and insecure Python programming constructs.
+
+### 1. Checks Performed
+* **Secret Scan**: Scans all repository files (excluding `.env`, `tests/`, and `.skills/`) for hardcoded credentials. It detects:
+  * PEM Private Keys
+  * AWS Access Key IDs (`AKIA`) and Secret Access Keys
+  * JSON Web Tokens (JWT)
+  * Bearer Tokens
+  * Generic API Keys / secret tokens
+* **Repository Hygiene**:
+  * Verifies that `.env` and `.seed/` are properly ignored in `.gitignore`.
+  * Rejects certificate and key files (`.crt`, `.pem`, `.cer`, `.key`, `.p12`, `.pfx`).
+  * Rejects credential files (`credentials`, `credentials.json`, `passwd`, `secrets.json`).
+* **Dangerous Code Scan**: Scans Python files (excluding `tests/` and `.skills/`) for unsafe coding patterns:
+  * `eval()`
+  * `exec()`
+  * `pickle.loads()`
+  * `yaml.load()`
+  * `shell=True` (in subprocess executions)
+
+### 2. Severity Levels & Commit Enforcement
+Findings are classified into five severity levels:
+* **CRITICAL**: Immediate security vulnerabilities (e.g. AWS credentials, unignored `.env`, or credential files). **Fails the Quality Gate.**
+* **HIGH**: Severe risks (e.g. JWT tokens, private key certificates, dangerous code like `eval` or `exec`). **Fails the Quality Gate.**
+* **MEDIUM**: Potential risks or bad practices. Does not fail the gate.
+* **LOW**: Minor warnings. Does not fail the gate.
+* **INFO**: Informational details. Does not fail the gate.
+
+Only findings of **CRITICAL** or **HIGH** severity will cause the Security Quality Gate to fail (`success=False`), preventing code commits.
+
+### 3. Recovery Steps
+If the Security Quality Gate fails:
+1. **Locate the Finding**: Read the detailed failure messages printed under the `--- [Security] ---` section (e.g. `[CRITICAL] SECRET: app/main.py:12 - Detected API Key`).
+2. **Remediate Secrets**: Remove any hardcoded credentials. Move them to a `.env` file or environment variables.
+3. **Fix Dangerous Code**: Refactor the code (e.g. replace `eval()` with `ast.literal_eval()`, replace `pickle.loads()` with `json.loads()`, or set `shell=False` in subprocesses).
+4. **Remove Hygiene Violations**: Delete or move certificate/credential files outside the repository. Add `.env` or `.seed/` to `.gitignore` if they are reported as not ignored.
+5. **Re-run Status Check**: Once resolved, execute `uv run seed status` again to obtain a `HEALTHY` status and recreate the verification stamp.
+
+### 4. Extension Guide (Plugging in new checks)
+To add a new security check or modify existing rules:
+1. **Open the Security Audit Script**: Edit [.skills/repository_guardian/scripts/security_audit.py](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/.skills/repository_guardian/scripts/security_audit.py).
+2. **Add a rule**:
+   * For regex-based secret scans, append a dictionary definition to `SECRET_RULES`.
+   * For code-based checks, append a dictionary definition to `DANGEROUS_CODE_RULES`.
+   * For hygiene constraints, update `CERT_EXTENSIONS` or `CRED_FILENAMES`.
+3. **Format & Test**: Run formatting and execute `pytest` to verify the new check works correctly without regressions.
+

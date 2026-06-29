@@ -2,14 +2,12 @@
 
 # ruff: noqa: T201, ERA001, S603, S607, UP022
 
-import subprocess
 import sys
 import time
 
 from git_helpers import (
     get_git_status,
     get_repo_root,
-    has_merge_conflicts,
     is_git_repository,
 )
 from quality_check import get_venv_tool, run_command
@@ -62,66 +60,28 @@ def main() -> None:
     # SECTION: Security
     # --------------------------------------------------
     print("\n--- [Security] ---")
+    from security_audit import run_security_audit
 
-    # Merge Conflict Detection
-    if has_merge_conflicts():
-        print(
-            "Merge Conflicts:  [FAIL] (Active conflict markers detected!)",
-            file=sys.stderr,
-        )
-        print("Please resolve conflicts before making commits.", file=sys.stderr)
+    audit_res = run_security_audit()
+    print(audit_res.message)
+    for detail in audit_res.details:
+        print(f"  {detail}")
+    if not audit_res.success:
         print("\n--- [Verification] ---", file=sys.stderr)
         invalidate_verification_stamp(root)
         print("Repository Status: UNHEALTHY", file=sys.stderr)
         print("\nVerification stamp removed.", file=sys.stderr)
         print(
-            "The repository verification is invalid due to active merge conflict markers.",
+            "The repository verification is invalid because security audits failed.",
             file=sys.stderr,
         )
-        print("\nPlease resolve the merge conflicts and run:", file=sys.stderr)
+        print("\nPlease fix the security vulnerabilities and run:", file=sys.stderr)
         print("\n  uv run seed status\n", file=sys.stderr)
         print("to perform quality checks and recreate the stamp.", file=sys.stderr)
 
         print("\n--- [Summary] ---", file=sys.stderr)
-        print("Seed Status:  Failed (Merge conflicts detected)", file=sys.stderr)
+        print("Seed Status:  Failed (Security audit failed)", file=sys.stderr)
         sys.exit(1)
-    print("Merge Conflicts:  [PASS] (None detected)")
-
-    # Secret Scanning (.env ignore check)
-    dot_env_path = root / ".env"
-    if dot_env_path.exists():
-        res = subprocess.run(
-            ["git", "check-ignore", ".env"],
-            cwd=str(root),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
-        if res.returncode == 0:
-            print("Secret Scan:      [PASS] (.env file successfully ignored)")
-        else:
-            print(
-                "Secret Scan:      [FAIL] (.env file is NOT ignored in .gitignore!)",
-                file=sys.stderr,
-            )
-            print("\n--- [Verification] ---", file=sys.stderr)
-            invalidate_verification_stamp(root)
-            print("Repository Status: UNHEALTHY", file=sys.stderr)
-            print("\nVerification stamp removed.", file=sys.stderr)
-            print(
-                "The repository verification is invalid because secrets (.env) are not ignored.",
-                file=sys.stderr,
-            )
-            print("\nPlease add '.env' to your '.gitignore' and run:", file=sys.stderr)
-            print("\n  uv run seed status\n", file=sys.stderr)
-            print("to perform quality checks and recreate the stamp.", file=sys.stderr)
-
-            print("\n--- [Summary] ---", file=sys.stderr)
-            print("Seed Status:  Failed (Secret scan failed)", file=sys.stderr)
-            sys.exit(1)
-    else:
-        print("Secret Scan:      [PASS] (No local .env file found)")
 
     # --------------------------------------------------
     # SECTION: Quality Gates
