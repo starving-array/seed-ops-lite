@@ -1,10 +1,13 @@
 """Tests for the Repository Guardian Skill."""
 
-# ruff: noqa: E402
+# ruff: noqa: E402, T201
 
+import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Add skill script directory to system path
 skill_dir = (
@@ -13,12 +16,22 @@ skill_dir = (
 if str(skill_dir) not in sys.path:
     sys.path.insert(0, str(skill_dir))
 
-from commit import generate_conventional_commit_message, validate_conventional_commit
+import commit
+from commit import (
+    generate_conventional_commit_message,
+    validate_conventional_commit,
+)
 from git_helpers import is_git_repository
 from quality_check import get_venv_tool
+from verification import (
+    get_tracked_changes_state,
+    invalidate_verification_stamp,
+    read_verification_stamp,
+    write_verification_stamp,
+)
 
 
-def test_validate_conventional_commit():
+def test_validate_conventional_commit() -> None:
     """Verify that commit messages are correctly validated against Conventional Commits."""
     assert validate_conventional_commit("feat(cli): add file check")
     assert validate_conventional_commit("fix: resolve logic bug")
@@ -33,7 +46,7 @@ def test_validate_conventional_commit():
     assert not validate_conventional_commit("chore: ")
 
 
-def test_generate_conventional_commit_message():
+def test_generate_conventional_commit_message() -> None:
     """Verify that a Conventional Commit message is generated correctly based on changed files."""
     # Test fallback
     with patch("commit.get_git_status_short", return_value=""):
@@ -64,12 +77,226 @@ def test_generate_conventional_commit_message():
         )
 
 
-def test_get_venv_tool():
+def test_get_venv_tool() -> None:
     """Verify resolution of virtualenv executables."""
     tool_path = get_venv_tool("ruff")
     assert "ruff" in tool_path.lower()
 
 
-def test_is_git_repository():
+def test_is_git_repository() -> None:
     """Verify detection of the git repository status."""
     assert is_git_repository() is True
+
+
+# ============================================================================
+# NEW TESTS: Verification Stamp and Change Detection (RG-1 to RG-3)
+# ============================================================================
+
+
+def test_write_verification_stamp(tmp_path: Path) -> None:
+    """Verify verification.json is created and follows the expected schema."""
+    with (
+        patch("verification.get_git_head", return_value="fake_head_hash"),
+        patch(
+            "verification.get_tracked_changes_state", return_value={"file.py": "hash"}
+        ),
+    ):
+        write_verification_stamp(tmp_path)
+
+    stamp_path = tmp_path / ".seed" / "verification.json"
+    assert stamp_path.exists()
+
+    with stamp_path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["healthy"] is True
+    assert data["git_head"] == "fake_head_hash"
+    assert data["tool"] == "seed status"
+    assert data["schema_version"] == 1
+    assert data["tracked_changes"] == {"file.py": "hash"}
+    assert "generated_at" in data
+    # Absolute repository path should NOT be stored (RG-2.1)
+    assert "repository" not in data
+
+
+def test_invalidate_verification_stamp(tmp_path: Path) -> None:
+    """Verify verification.json is deleted or invalidated when requested."""
+    seed_dir = tmp_path / ".seed"
+    seed_dir.mkdir(exist_ok=True)
+    stamp_path = seed_dir / "verification.json"
+    stamp_path.write_text("{}", encoding="utf-8")
+
+    assert stamp_path.exists()
+    invalidate_verification_stamp(tmp_path)
+    assert not stamp_path.exists()
+
+
+def test_read_verification_stamp_corrupted(tmp_path: Path) -> None:
+    """Verify corrupted verification.json is handled gracefully and returns None."""
+    seed_dir = tmp_path / ".seed"
+    seed_dir.mkdir(exist_ok=True)
+    stamp_path = seed_dir / "verification.json"
+
+    # Invalid JSON syntax
+    stamp_path.write_text("{invalid json", encoding="utf-8")
+    assert read_verification_stamp(tmp_path) is None
+
+    # Missing file
+    stamp_path.unlink()
+    assert read_verification_stamp(tmp_path) is None
+
+
+def test_write_verification_stamp_recreates_directory(tmp_path: Path) -> None:
+    """Verify missing .seed directory is recreated correctly during stamp write."""
+    seed_dir = tmp_path / ".seed"
+    assert not seed_dir.exists()
+
+    with patch("verification.get_git_head", return_value="head_hash"):
+        write_verification_stamp(tmp_path)
+
+    assert seed_dir.exists()
+    assert (seed_dir / "verification.json").exists()
+
+
+def test_get_tracked_changes_state() -> None:
+    """Verify change detection under different git porcelain outputs."""
+    # Scenario: Modifying a tracked file, deleting a file, untracked, and ignored files
+    git_porcelain = (
+        " M app/api/endpoints/schema.py\n"
+        " D tests/test_e2e_workflow.py\n"
+        "?? untracked_temp.txt\n"
+        "!! ignored_temp.txt\n"
+        "R  old_name.py -> new_name.py\n"
+    )
+
+    fake_run = MagicMock()
+    fake_run.returncode = 0
+    fake_run.stdout = git_porcelain
+
+    with (
+        patch("subprocess.run", return_value=fake_run),
+        patch("verification.get_file_sha256", return_value="fake_sha256"),
+    ):
+        changes = get_tracked_changes_state(Path("/fake/repo"))
+
+    # Assert modified tracked file is captured
+    assert "app/api/endpoints/schema.py" in changes
+    assert changes["app/api/endpoints/schema.py"] == "fake_sha256"
+
+    # Assert deleted tracked file is captured as 'deleted'
+    assert "tests/test_e2e_workflow.py" in changes
+    assert changes["tests/test_e2e_workflow.py"] == "deleted"
+
+    # Assert rename destination file is captured
+    assert "new_name.py" in changes
+    assert changes["new_name.py"] == "fake_sha256"
+
+    # Assert untracked and ignored files do NOT invalidate/show up in tracked changes
+    assert "untracked_temp.txt" not in changes
+    assert "ignored_temp.txt" not in changes
+
+
+# ============================================================================
+# NEW TESTS: Commit Enforcement (RG-2 to RG-4)
+# ============================================================================
+
+
+def test_commit_with_valid_stamp() -> None:
+    """Verify commit succeeds when verification stamp is valid."""
+    fake_stamp = {
+        "healthy": True,
+        "git_head": "valid_head_hash",
+        "tracked_changes": {},
+    }
+
+    with (
+        patch("commit.read_verification_stamp", return_value=fake_stamp),
+        patch("commit.get_git_head", return_value="valid_head_hash"),
+        patch("commit.get_tracked_changes_state", return_value={}),
+        patch("commit.stage_files") as mock_stage,
+        patch("commit.create_commit", return_value="commit_hash") as mock_commit,
+        patch("sys.argv", ["commit", "-m", "feat: commit success"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        commit.main()
+
+    assert exc.value.code == 0
+    mock_stage.assert_called_once()
+    mock_commit.assert_called_once_with("feat: commit success")
+
+
+def test_commit_fails_when_missing_stamp(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify commit fails with helpful instructions when stamp is missing."""
+    with (
+        patch("commit.read_verification_stamp", return_value=None),
+        patch("sys.argv", ["commit", "-m", "feat: missing stamp"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        commit.main()
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "Repository verification stamp not found." in captured.out
+    assert "uv run seed status" in captured.out
+
+
+def test_commit_fails_when_unhealthy_stamp(capsys: pytest.CaptureFixture[str]) -> None:
+    """Verify commit fails with helpful instructions when stamp is unhealthy."""
+    fake_stamp = {
+        "healthy": False,
+        "git_head": "valid_head_hash",
+        "tracked_changes": {},
+    }
+
+    with (
+        patch("commit.read_verification_stamp", return_value=fake_stamp),
+        patch("sys.argv", ["commit", "-m", "feat: unhealthy stamp"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        commit.main()
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "Repository is in an unhealthy state." in captured.out
+    assert "uv run seed status" in captured.out
+
+
+def test_commit_fails_when_outdated_or_changed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify commit fails when repository or HEAD has changed since validation."""
+    fake_stamp = {
+        "healthy": True,
+        "git_head": "head_hash_v1",
+        "tracked_changes": {"app.py": "sha1"},
+    }
+
+    # Case A: HEAD mismatched
+    with (
+        patch("commit.read_verification_stamp", return_value=fake_stamp),
+        patch("commit.get_git_head", return_value="head_hash_v2"),
+        patch("commit.get_tracked_changes_state", return_value={"app.py": "sha1"}),
+        patch("sys.argv", ["commit", "-m", "feat: outdated head"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        commit.main()
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "Repository verification is no longer valid." in captured.out
+    assert "uv run seed status" in captured.out
+
+    # Case B: Tracked changes mismatched (file modified)
+    with (
+        patch("commit.read_verification_stamp", return_value=fake_stamp),
+        patch("commit.get_git_head", return_value="head_hash_v1"),
+        patch("commit.get_tracked_changes_state", return_value={"app.py": "sha2"}),
+        patch("sys.argv", ["commit", "-m", "feat: outdated changes"]),
+        pytest.raises(SystemExit) as exc,
+    ):
+        commit.main()
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "Repository verification is no longer valid." in captured.out
+    assert "uv run seed status" in captured.out
