@@ -87,17 +87,21 @@ def main() -> None:
     stamp = read_verification_stamp(repo_root)
 
     if stamp is None:
-        print("Repository verification not found.")
-        print("\nRun:\n")
-        print("  uv run seed status\n")
-        print("before committing.")
+        print("Repository verification stamp not found.")
+        print("\nPlease run:")
+        print("\n  uv run seed status\n")
+        print(
+            "to verify the repository and create the verification stamp before committing."
+        )
         sys.exit(1)
 
     if not stamp.get("healthy"):
-        print("Repository is not verified.")
-        print("\nRun:\n")
-        print("  uv run seed status\n")
-        print("after fixing the repository.")
+        print("Repository is in an unhealthy state.")
+        print("\nPlease run:")
+        print("\n  uv run seed status\n")
+        print(
+            "after resolving the codebase issues to perform checks and recreate the stamp."
+        )
         sys.exit(1)
 
     # Validate stored Git HEAD and tracked changes state
@@ -108,10 +112,12 @@ def main() -> None:
 
     if stored_head != current_head or current_changes != stored_changes:
         print("Repository verification is no longer valid.")
-        print("\nThe repository has changed since the last successful verification.\n")
-        print("Run:\n")
-        print("  uv run seed status\n")
-        print("before committing.")
+        print(
+            "The repository has changed (modified/deleted files, newly staged tracked files, or Git HEAD changed) since the last successful verification."
+        )
+        print("\nPlease run:")
+        print("\n  uv run seed status\n")
+        print("to verify the new changes and update the stamp before committing.")
         sys.exit(1)
 
     # 2. Determine Commit Message

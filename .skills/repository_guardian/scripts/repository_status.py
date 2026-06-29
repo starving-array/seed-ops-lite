@@ -35,11 +35,23 @@ def main() -> None:
 
     # Git Repository Verification
     if not is_git_repository():
-        print("Status:  Failed (Not a Git repository)", file=sys.stderr)
+        print("Status:  [FAIL] (Not a Git repository)", file=sys.stderr)
+        print("\n--- [Verification] ---", file=sys.stderr)
         invalidate_verification_stamp(root)
-        print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
+        print("Repository Status: UNHEALTHY", file=sys.stderr)
+        print("\nVerification stamp removed.", file=sys.stderr)
+        print(
+            "The repository verification is invalid because it is not a Git repository.",
+            file=sys.stderr,
+        )
+        print("\nPlease initialize a Git repository and run:", file=sys.stderr)
+        print("\n  uv run seed status\n", file=sys.stderr)
+        print("to perform quality checks and create the stamp.", file=sys.stderr)
+
+        print("\n--- [Summary] ---", file=sys.stderr)
+        print("Seed Status:  Failed (Not a Git repository)", file=sys.stderr)
         sys.exit(1)
-    print("Status:  Passed (Git repository detected)")
+    print("Status:  [PASS] (Git repository detected)")
 
     # Git Status Summary
     status_out = get_git_status()
@@ -54,14 +66,26 @@ def main() -> None:
     # Merge Conflict Detection
     if has_merge_conflicts():
         print(
-            "Merge Conflicts:  Failed (Active conflict markers detected!)",
+            "Merge Conflicts:  [FAIL] (Active conflict markers detected!)",
             file=sys.stderr,
         )
         print("Please resolve conflicts before making commits.", file=sys.stderr)
+        print("\n--- [Verification] ---", file=sys.stderr)
         invalidate_verification_stamp(root)
-        print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
+        print("Repository Status: UNHEALTHY", file=sys.stderr)
+        print("\nVerification stamp removed.", file=sys.stderr)
+        print(
+            "The repository verification is invalid due to active merge conflict markers.",
+            file=sys.stderr,
+        )
+        print("\nPlease resolve the merge conflicts and run:", file=sys.stderr)
+        print("\n  uv run seed status\n", file=sys.stderr)
+        print("to perform quality checks and recreate the stamp.", file=sys.stderr)
+
+        print("\n--- [Summary] ---", file=sys.stderr)
+        print("Seed Status:  Failed (Merge conflicts detected)", file=sys.stderr)
         sys.exit(1)
-    print("Merge Conflicts:  Passed (None detected)")
+    print("Merge Conflicts:  [PASS] (None detected)")
 
     # Secret Scanning (.env ignore check)
     dot_env_path = root / ".env"
@@ -75,17 +99,29 @@ def main() -> None:
             check=False,
         )
         if res.returncode == 0:
-            print("Secret Scan:      Passed (.env file successfully ignored)")
+            print("Secret Scan:      [PASS] (.env file successfully ignored)")
         else:
             print(
-                "Secret Scan:      Failed (.env file is NOT ignored in .gitignore!)",
+                "Secret Scan:      [FAIL] (.env file is NOT ignored in .gitignore!)",
                 file=sys.stderr,
             )
+            print("\n--- [Verification] ---", file=sys.stderr)
             invalidate_verification_stamp(root)
-            print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
+            print("Repository Status: UNHEALTHY", file=sys.stderr)
+            print("\nVerification stamp removed.", file=sys.stderr)
+            print(
+                "The repository verification is invalid because secrets (.env) are not ignored.",
+                file=sys.stderr,
+            )
+            print("\nPlease add '.env' to your '.gitignore' and run:", file=sys.stderr)
+            print("\n  uv run seed status\n", file=sys.stderr)
+            print("to perform quality checks and recreate the stamp.", file=sys.stderr)
+
+            print("\n--- [Summary] ---", file=sys.stderr)
+            print("Seed Status:  Failed (Secret scan failed)", file=sys.stderr)
             sys.exit(1)
     else:
-        print("Secret Scan:      Passed (No local .env file found)")
+        print("Secret Scan:      [PASS] (No local .env file found)")
 
     # --------------------------------------------------
     # SECTION: Quality Gates
@@ -108,9 +144,9 @@ def main() -> None:
         elapsed = time.time() - start_time
 
         if success:
-            print(f" Passed ({elapsed:.2f}s)")
+            print(f" [PASS] ({elapsed:.2f}s)")
         else:
-            print(f" Failed ({elapsed:.2f}s)", file=sys.stderr)
+            print(f" [FAIL] ({elapsed:.2f}s)", file=sys.stderr)
             print(
                 "\n==================================================",
                 file=sys.stderr,
@@ -120,15 +156,36 @@ def main() -> None:
                 "==================================================",
                 file=sys.stderr,
             )
+            print(f"Failed Command: {' '.join(cmd)}", file=sys.stderr)
             if stdout:
                 print(f"STDOUT:\n{stdout}", file=sys.stderr)
             if stderr:
                 print(f"STDERR:\n{stderr}", file=sys.stderr)
-            print("\n--- [Summary] ---")
-            print("Seed Status:  Failed (Quality gate aborted)", file=sys.stderr)
+
+            print("\n--- [Verification] ---", file=sys.stderr)
             invalidate_verification_stamp(root)
-            print("\nRepository Status: UNHEALTHY\n\nVerification stamp removed.")
+            print("Repository Status: UNHEALTHY", file=sys.stderr)
+            print("\nVerification stamp removed.", file=sys.stderr)
+            print(
+                "The repository verification is invalid because the checks failed.",
+                file=sys.stderr,
+            )
+            print("\nPlease fix the failures and run:", file=sys.stderr)
+            print("\n  uv run seed status\n", file=sys.stderr)
+            print("to perform quality checks and recreate the stamp.", file=sys.stderr)
+
+            print("\n--- [Summary] ---", file=sys.stderr)
+            print("Seed Status:  Failed (Quality gate aborted)", file=sys.stderr)
             sys.exit(1)
+
+    # --------------------------------------------------
+    # SECTION: Verification
+    # --------------------------------------------------
+    print("\n--- [Verification] ---")
+    write_verification_stamp(root)
+    print("Repository Status: HEALTHY")
+    print("\nVerification stamp created successfully.")
+    print("The repository is now verified and ready for commit.")
 
     # --------------------------------------------------
     # SECTION: Summary
@@ -136,8 +193,6 @@ def main() -> None:
     print("\n--- [Summary] ---")
     print("Seed Status:  Passed (HEALTHY - All checks pass)")
     print("==================================================")
-    write_verification_stamp(root)
-    print("\nRepository Status: HEALTHY\n\nVerification stamp created.")
     sys.exit(0)
 
 

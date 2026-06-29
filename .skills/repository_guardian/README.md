@@ -57,8 +57,30 @@ Freeze a development phase and tag it using Seed Freeze:
 seed freeze -p 10
 ```
 
-## Runtime Verification Stamp
+## Runtime Verification Stamp & Workflow
 
 The Repository Guardian uses a local directory `.seed/` containing `verification.json` to store the verification stamp.
+
 * **Local runtime metadata**: `.seed/` contains local runtime verification stamps that must never be committed. It is intentionally excluded from Git in `.gitignore`.
 * **Zero personal information**: The stamp stores only the health status, tool name, current Git HEAD, a UTC timestamp, and format schema version. It never stores absolute paths, usernames, or machine-specific filesystem information.
+* **Commit Enforcement**: The `seed commit` tool enforces quality gates by verifying the verification stamp *before* staging or committing any files.
+* **Verification Invalidation**: The stamp becomes automatically invalid whenever:
+  - Any tracked file is modified, deleted, or staged.
+  - The Git HEAD changes.
+  Untracked files do *not* invalidate the verification stamp.
+
+### Recommended Developer Workflow
+
+To ensure only verified code reaches the repository, developers should follow this sequential workflow:
+
+1. **Implement changes** in the codebase.
+2. **Run verification**:
+   ```bash
+   uv run seed status
+   ```
+3. **Fix any failures** if any quality gate reports errors.
+4. **Achieve healthy state**: once all gates pass, the repository status becomes `HEALTHY`, and the verification stamp is created/updated.
+5. **Commit verified changes**:
+   ```bash
+   uv run seed commit
+   ```
