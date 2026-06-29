@@ -18,12 +18,8 @@ def override_redis(app: FastAPI) -> Any:
     async def mock_get(key: str) -> bytes | None:
         return store.get(key)
 
-    async def mock_set(
-        key: str, value: Any, *_args: Any, **_kwargs: Any
-    ) -> bool:
-        store[key] = (
-            value if isinstance(value, bytes) else str(value).encode("utf-8")
-        )
+    async def mock_set(key: str, value: Any, *_args: Any, **_kwargs: Any) -> bool:
+        store[key] = value if isinstance(value, bytes) else str(value).encode("utf-8")
         return True
 
     async def mock_sadd(key: str, member: str) -> int:
@@ -34,9 +30,7 @@ def override_redis(app: FastAPI) -> Any:
 
     async def mock_smembers(key: str) -> set[bytes]:
         val = store.get(key, set())
-        return {
-            m.encode("utf-8") if isinstance(m, str) else m for m in val
-        }
+        return {m.encode("utf-8") if isinstance(m, str) else m for m in val}
 
     mock_redis.get = mock_get
     mock_redis.set = mock_set
@@ -88,7 +82,11 @@ async def test_ai_assist_success(client: AsyncClient) -> None:
                 suggestion="Create index on user_id.",
             ),
         ],
-        recommendations=["Rename table to users.", "Add user_id column and foreign key reference.", "Create index on user_id."],
+        recommendations=[
+            "Rename table to users.",
+            "Add user_id column and foreign key reference.",
+            "Create index on user_id.",
+        ],
         warnings=[],
         execution_statistics={},
         executed_skills=["naming", "relationships", "best_practices"],
@@ -124,7 +122,9 @@ async def test_ai_assist_success(client: AsyncClient) -> None:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "Completed"
-        assert data["summary"] == "Database schema has some opportunities for improvement."
+        assert (
+            data["summary"] == "Database schema has some opportunities for improvement."
+        )
         assert len(data["suggestions"]) == 3
 
         suggestions = data["suggestions"]
@@ -380,6 +380,3 @@ async def test_download_exported_file_not_found(client: AsyncClient) -> None:
     response = await client.get("/schema/export/missing-export-id/download")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
-
-
-

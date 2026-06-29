@@ -3,7 +3,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 
 from app.api.deps import get_redis
 from app.schemas.schema_design import (
@@ -141,7 +141,7 @@ DEFAULT_SCHEMA: dict[str, Any] = {
 
 @router.get("", response_model=SchemaModel)
 async def load_schema(
-    db: RedisType = Depends(get_redis),  # noqa: B008
+    db: RedisType = Depends(get_redis),
 ) -> SchemaModel:
     """Loads the currently saved schema state from Redis."""
     try:
@@ -159,7 +159,7 @@ async def load_schema(
 @router.post("", status_code=status.HTTP_200_OK)
 async def save_schema(
     schema: SchemaModel,
-    db: RedisType = Depends(get_redis),  # noqa: B008
+    db: RedisType = Depends(get_redis),
 ) -> dict[str, str]:
     """Saves the current schema state to Redis."""
     try:
@@ -632,7 +632,7 @@ async def update_job(
     result_summary: str | None = None,
     error_message: str | None = None,
     details: dict[str, Any] | None = None,
-):
+) -> None:
     import json
     from datetime import datetime
 
@@ -678,9 +678,9 @@ async def run_generation_background(
     row_targets: dict[str, int],
     seed: int | None,
     batch_size: int,
-    output_format: str,
+    _output_format: str,
     db_client: RedisType,
-):
+) -> None:
     import asyncio
     import json
     import time
@@ -728,7 +728,7 @@ async def run_generation_background(
         for t_name in ordered_tables
     }
 
-    status_dict = {
+    status_dict: dict[str, Any] = {
         "workflowId": workflow_id,
         "status": "Running",
         "totalRowsGenerated": 0,
@@ -826,8 +826,7 @@ async def run_generation_background(
                 total_rows_generated_acc += batch_limit
 
                 pct = (
-                    (total_rows_generated_acc / total_records_to_generate)
-                    * 100.0
+                    (total_rows_generated_acc / total_records_to_generate) * 100.0
                     if total_records_to_generate > 0
                     else 0.0
                 )
@@ -868,9 +867,7 @@ async def run_generation_background(
             for t_name in ordered_tables:
                 if progress_map[t_name]["status"] in ("Pending", "Running"):
                     progress_map[t_name]["status"] = "Failed"
-                    progress_map[t_name]["error"] = (
-                        "Generation cancelled by user"
-                    )
+                    progress_map[t_name]["error"] = "Generation cancelled by user"
 
             status_dict["status"] = "Failed"
             status_dict["errors"].append("Generation cancelled by user.")
@@ -1127,9 +1124,7 @@ async def list_jobs(
     import json
 
     job_ids_bytes = await db.smembers("jobs:all_ids")
-    job_ids = (
-        [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
-    )
+    job_ids = [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
 
     jobs = []
     for j_id in job_ids:
@@ -1188,7 +1183,7 @@ async def run_export_background(
     export_job_id: str,
     settings: ExportSettingsModel,
     db_client: RedisType,
-):
+) -> None:
     import io
     import json
     import time
@@ -1225,11 +1220,7 @@ async def run_export_background(
 
         # Filter tables to export if specified
         if settings.tables:
-            records = {
-                t: all_records[t]
-                for t in settings.tables
-                if t in all_records
-            }
+            records = {t: all_records[t] for t in settings.tables if t in all_records}
         else:
             records = all_records
 
@@ -1261,11 +1252,7 @@ async def run_export_background(
 
         export_res = await engine.export(export_req)
         if not export_res.success:
-            err_msg = (
-                export_res.errors[0]
-                if export_res.errors
-                else "Unknown error"
-            )
+            err_msg = export_res.errors[0] if export_res.errors else "Unknown error"
             raise Exception(f"Serializer failure: {err_msg}")
 
         # Step Packaging
@@ -1287,17 +1274,13 @@ async def run_export_background(
 
         if zip_placeholder or len(serialized_data) > 1:
             zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(
-                zip_buffer, "w", zipfile.ZIP_DEFLATED
-            ) as zip_file:
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 if settings.include_metadata:
                     meta = {
                         "exportedAt": datetime.utcnow().isoformat() + "Z",
                         "format": fmt,
                         "tables": list(records.keys()),
-                        "totalRecords": sum(
-                            len(rows) for rows in records.values()
-                        ),
+                        "totalRecords": sum(len(rows) for rows in records.values()),
                     }
                     zip_file.writestr("metadata.json", json.dumps(meta, indent=2))
 
@@ -1387,9 +1370,7 @@ async def list_exportable_datasets(
     import json
 
     job_ids_bytes = await db.smembers("jobs:all_ids")
-    job_ids = (
-        [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
-    )
+    job_ids = [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
 
     datasets = []
     for j_id in job_ids:
@@ -1443,16 +1424,13 @@ async def start_export_job(
         status="Queued",
         progress=0.0,
         started_at=datetime.utcnow().isoformat() + "Z",
-        result_summary=(
-            f"Preparing dataset export format {request.format.upper()}..."
-        ),
+        result_summary=(f"Preparing dataset export format {request.format.upper()}..."),
     )
 
-    background_tasks.add_task(
-        run_export_background, export_job_id, request, db
-    )
+    background_tasks.add_task(run_export_background, export_job_id, request, db)
 
     job_bytes = await db.get(f"jobs:{export_job_id}")
+    assert job_bytes is not None
     job_dict = json.loads(job_bytes.decode("utf-8"))
     return JobModel(**job_dict)
 
@@ -1461,7 +1439,7 @@ async def start_export_job(
 async def download_exported_file(
     export_job_id: str,
     db: RedisType = Depends(get_redis),
-):
+) -> Response:
     """Retrieves and downloads the serialized data file for a completed export job."""
     import json
 
@@ -1488,6 +1466,3 @@ async def download_exported_file(
             "Content-Length": str(payload["fileSizeBytes"]),
         },
     )
-
-
-

@@ -16,12 +16,8 @@ def override_redis(app: FastAPI) -> Any:
     async def mock_get(key: str) -> bytes | None:
         return store.get(key)
 
-    async def mock_set(
-        key: str, value: Any, *_args: Any, **_kwargs: Any
-    ) -> bool:
-        store[key] = (
-            value if isinstance(value, bytes) else str(value).encode("utf-8")
-        )
+    async def mock_set(key: str, value: Any, *_args: Any, **_kwargs: Any) -> bool:
+        store[key] = value if isinstance(value, bytes) else str(value).encode("utf-8")
         return True
 
     async def mock_sadd(key: str, member: str) -> int:
@@ -32,9 +28,7 @@ def override_redis(app: FastAPI) -> Any:
 
     async def mock_smembers(key: str) -> set[bytes]:
         val = store.get(key, set())
-        return {
-            m.encode("utf-8") if isinstance(m, str) else m for m in val
-        }
+        return {m.encode("utf-8") if isinstance(m, str) else m for m in val}
 
     mock_redis.get = mock_get
     mock_redis.set = mock_set
@@ -128,6 +122,7 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
 
     # Prepare Mock Report for AI Assistant
     from app.agents.schema_validation.models import AgentFinding, SchemaValidationReport
+
     mock_report = SchemaValidationReport(
         overall_status="warning",
         summary="Database schema has some opportunities for improvement.",
@@ -149,6 +144,7 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
     # Prepare Mock AI Strategy Generator records
     async def mock_execute_contract(_gateway: Any, contract_request: Any) -> Any:
         import typing
+
         schema_cls = contract_request.response_schema
         record_type = schema_cls.model_fields["records"].annotation
         args = typing.get_args(record_type)
@@ -177,6 +173,7 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
         response_data = schema_cls(records=dummy_records)
 
         from app.llm.contracts.response import AIContractResponse, ContractMetadata
+
         metadata = ContractMetadata(
             provider="MockProvider",
             model="MockModel",
@@ -195,14 +192,17 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
         )
 
     # Patch the SchemaValidationAgent and the AI Seeder execution flow
-    with patch(
-        "app.agents.schema_validation.agent.SchemaValidationAgent.validate_schema",
-        new_callable=AsyncMock,
-        return_value=mock_report,
-    ), patch(
-        "app.seeder.ai.AIContractNormalizer.execute_contract",
-        new_callable=AsyncMock,
-        side_effect=mock_execute_contract,
+    with (
+        patch(
+            "app.agents.schema_validation.agent.SchemaValidationAgent.validate_schema",
+            new_callable=AsyncMock,
+            return_value=mock_report,
+        ),
+        patch(
+            "app.seeder.ai.AIContractNormalizer.execute_contract",
+            new_callable=AsyncMock,
+            side_effect=mock_execute_contract,
+        ),
     ):
         # 1. Schema Validation Pre-check
         validate_resp = await client.post("/schema/validate", json=schema_state)
@@ -275,7 +275,9 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
             if export_status_data["status"] == "Completed":
                 break
             if export_status_data["status"] == "Failed":
-                pytest.fail(f"Export job failed: {export_status_data.get('errorMessage')}")
+                pytest.fail(
+                    f"Export job failed: {export_status_data.get('errorMessage')}"
+                )
             await asyncio.sleep(0.01)
         else:
             pytest.fail("Export job timed out before completing.")
@@ -312,7 +314,10 @@ async def test_e2e_export_missing_records(client: AsyncClient) -> None:
         export_status_resp = await client.get(f"/schema/jobs/{export_job_id}")
         export_status_data = export_status_resp.json()
         if export_status_data["status"] == "Failed":
-            assert "no generated dataset records found" in export_status_data["errorMessage"].lower()
+            assert (
+                "no generated dataset records found"
+                in export_status_data["errorMessage"].lower()
+            )
             break
         await asyncio.sleep(0.01)
     else:
