@@ -54,6 +54,51 @@ ENV_MAPPING = {
 }
 
 
+def load_dot_env() -> None:
+    """Load keys from .env file in the workspace root into os.environ with SEEDOPS_ prefix."""
+    import sys
+
+    # Skip loading .env when running unit tests to maintain test isolation
+    if "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ:
+        return
+
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if env_path.exists():
+        try:
+            with env_path.open(encoding="utf-8") as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip()
+                    if (val.startswith('"') and val.endswith('"')) or (
+                        val.startswith("'") and val.endswith("'")
+                    ):
+                        val = val[1:-1]
+
+                    # Map prefixless keys to SEEDOPS_ prefixed keys
+                    prefixed_key = (
+                        key if key.startswith("SEEDOPS_") else f"SEEDOPS_{key}"
+                    )
+
+                    # Map custom mappings to match ENV_MAPPING exactly
+                    if key == "REDIS_TIMEOUT_SECONDS":
+                        prefixed_key = "SEEDOPS_REDIS_TIMEOUT"
+                    elif key == "LOG_JSON_FORMAT":
+                        prefixed_key = "SEEDOPS_LOG_JSON"
+                    elif key == "LLM_MAX_RETRIES":
+                        prefixed_key = "SEEDOPS_LLM_RETRIES"
+                    elif key == "LLM_TIMEOUT":
+                        prefixed_key = "SEEDOPS_LLM_TIMEOUT"
+
+                    if prefixed_key not in os.environ:
+                        os.environ[prefixed_key] = val
+        except Exception:  # noqa: S110
+            pass
+
+
 def parse_env_value(val: str, target_type: type) -> Any:
     """Convert env string to target python type."""
     if target_type is bool:
@@ -112,6 +157,7 @@ class ConfigurationLoader:
         programmatic_overrides: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], list[ConfigurationSource]]:
         """Load and merge configs deterministically, returning raw dictionary and loaded sources."""
+        load_dot_env()
         sources = []
         raw_config: dict[str, Any] = {}
 

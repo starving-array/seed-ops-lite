@@ -51,6 +51,16 @@ RESERVED_KEYWORDS = {
 }
 IDENTIFIER_REGEX = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
+
+def _safe_decode(value: Any) -> str:
+    """Safely decode bytes to string, or return string directly."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
 DEFAULT_SCHEMA: dict[str, Any] = {
     "tables": [
         {
@@ -639,7 +649,7 @@ async def update_job(
     job_key = f"jobs:{job_id}"
     existing_bytes = await db_client.get(job_key)
     if existing_bytes:
-        job_dict = json.loads(existing_bytes.decode("utf-8"))
+        job_dict = json.loads(_safe_decode(existing_bytes))
     else:
         job_dict = {
             "jobId": job_id,
@@ -762,7 +772,7 @@ async def run_generation_background(
         for t_name in ordered_tables:
             # Check for cancellation
             cancel_flag = await db_client.get(f"generation:{workflow_id}:cancel")
-            if cancel_flag and cancel_flag.decode("utf-8") == "true":
+            if cancel_flag and _safe_decode(cancel_flag) == "true":
                 generation_cancelled = True
                 break
 
@@ -797,7 +807,7 @@ async def run_generation_background(
             while rows_generated_for_table < target_rows:
                 # Check for cancellation inside batch loop
                 cancel_flag = await db_client.get(f"generation:{workflow_id}:cancel")
-                if cancel_flag and cancel_flag.decode("utf-8") == "true":
+                if cancel_flag and _safe_decode(cancel_flag) == "true":
                     generation_cancelled = True
                     break
 
@@ -1043,7 +1053,7 @@ async def get_generation_status(
             status_code=404, detail="Generation workflow session not found."
         )
 
-    status_dict = json.loads(status_bytes.decode("utf-8"))
+    status_dict = json.loads(_safe_decode(status_bytes))
 
     # Dynamically update duration_ms if it's still running
     if status_dict.get("status") == "Running" and "startTime" in status_dict:
@@ -1102,7 +1112,7 @@ async def download_generated_data(
 
     import json
 
-    status_dict = json.loads(status_bytes.decode("utf-8"))
+    status_dict = json.loads(_safe_decode(status_bytes))
     return {
         "status": "success",
         "message": "Synthetic dataset generation complete.",
@@ -1124,13 +1134,13 @@ async def list_jobs(
     import json
 
     job_ids_bytes = await db.smembers("jobs:all_ids")
-    job_ids = [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
+    job_ids = [_safe_decode(j) for j in job_ids_bytes] if job_ids_bytes else []
 
     jobs = []
     for j_id in job_ids:
         job_bytes = await db.get(f"jobs:{j_id}")
         if job_bytes:
-            job_dict = json.loads(job_bytes.decode("utf-8"))
+            job_dict = json.loads(_safe_decode(job_bytes))
 
             # Apply filters
             if status and job_dict.get("status", "").lower() != status.lower():
@@ -1166,7 +1176,7 @@ async def get_job_details(
             detail=f"Job session {job_id} not found.",
         )
 
-    job_dict = json.loads(job_bytes.decode("utf-8"))
+    job_dict = json.loads(_safe_decode(job_bytes))
     return JobModel(**job_dict)
 
 
@@ -1216,7 +1226,7 @@ async def run_export_background(
                 f"No generated dataset records found for session {settings.workflow_id}"
             )
 
-        all_records = json.loads(records_bytes.decode("utf-8"))
+        all_records = json.loads(_safe_decode(records_bytes))
 
         # Filter tables to export if specified
         if settings.tables:
@@ -1370,13 +1380,13 @@ async def list_exportable_datasets(
     import json
 
     job_ids_bytes = await db.smembers("jobs:all_ids")
-    job_ids = [j.decode("utf-8") for j in job_ids_bytes] if job_ids_bytes else []
+    job_ids = [_safe_decode(j) for j in job_ids_bytes] if job_ids_bytes else []
 
     datasets = []
     for j_id in job_ids:
         job_bytes = await db.get(f"jobs:{j_id}")
         if job_bytes:
-            job_dict = json.loads(job_bytes.decode("utf-8"))
+            job_dict = json.loads(_safe_decode(job_bytes))
             if (
                 job_dict.get("type") == "generation"
                 and job_dict.get("status") == "Completed"
@@ -1385,7 +1395,7 @@ async def list_exportable_datasets(
                 progress_list = []
                 total_rows = 0
                 if gen_bytes:
-                    gen_dict = json.loads(gen_bytes.decode("utf-8"))
+                    gen_dict = json.loads(_safe_decode(gen_bytes))
                     progress_list = gen_dict.get("progress", [])
                     total_rows = gen_dict.get("totalRowsGenerated", 0)
 
@@ -1431,7 +1441,7 @@ async def start_export_job(
 
     job_bytes = await db.get(f"jobs:{export_job_id}")
     assert job_bytes is not None
-    job_dict = json.loads(job_bytes.decode("utf-8"))
+    job_dict = json.loads(_safe_decode(job_bytes))
     return JobModel(**job_dict)
 
 
@@ -1455,7 +1465,7 @@ async def download_exported_file(
             ),
         )
 
-    payload = json.loads(payload_bytes.decode("utf-8"))
+    payload = json.loads(_safe_decode(payload_bytes))
     file_bytes = bytes.fromhex(payload["bytes"])
 
     return Response(
