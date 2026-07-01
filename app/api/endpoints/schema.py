@@ -659,7 +659,7 @@ async def update_job(
             "finishedAt": None,
             "duration": 0.0,
             "progress": 0.0,
-            "owner": "admin",
+            "owner": None,
             "resultSummary": None,
             "errorMessage": None,
             "details": {},
@@ -753,13 +753,45 @@ async def run_generation_background(
         json.dumps(status_dict),
     )
 
+    # Initialize statistics counters
+    total_records_gen = 0
+    successful_records_gen = 0
+    failed_records_gen = 0
+    deterministic_fields_count_gen = 0
+    ai_fields_count_gen = 0
+    prompt_tokens_gen = 0
+    completion_tokens_gen = 0
+    total_tokens_gen = 0
+    estimated_cost_gen = 0.0
+    latency_ms_gen = 0.0
+
+    def get_metadata_details() -> dict[str, Any]:
+        return {
+            "progress": list(progress_map.values()),
+            "generatedSeed": seed,
+            "selectedBatchSize": batch_size,
+            "batchSelectionStrategy": "Auto",
+            "statistics": {
+                "totalRecords": total_records_gen,
+                "successfulRecords": successful_records_gen,
+                "failedRecords": failed_records_gen,
+                "deterministicFieldsCount": deterministic_fields_count_gen,
+                "aiFieldsCount": ai_fields_count_gen,
+                "promptTokens": prompt_tokens_gen,
+                "completionTokens": completion_tokens_gen,
+                "totalTokens": total_tokens_gen,
+                "estimatedCost": estimated_cost_gen,
+                "latencyMs": latency_ms_gen,
+            },
+        }
+
     # Move Job status to Running
     await update_job(
         db_client,
         job_id=workflow_id,
         status="Running",
         progress=0.0,
-        details={"progress": list(progress_map.values())},
+        details=get_metadata_details(),
     )
 
     all_records: dict[str, list[dict[str, Any]]] = {}
@@ -828,6 +860,20 @@ async def run_generation_background(
                         f"Seeder failed to generate records for table {t_name}"
                     )
 
+                # Accumulate statistics if available
+                if seed_res.statistics:
+                    stats = seed_res.statistics
+                    total_records_gen += stats.total_records
+                    successful_records_gen += stats.successful_records
+                    failed_records_gen += stats.failed_records
+                    deterministic_fields_count_gen += stats.deterministic_fields_count
+                    ai_fields_count_gen += stats.ai_fields_count
+                    prompt_tokens_gen += stats.prompt_tokens
+                    completion_tokens_gen += stats.completion_tokens
+                    total_tokens_gen += stats.total_tokens
+                    estimated_cost_gen += stats.estimated_cost
+                    latency_ms_gen += stats.latency_ms
+
                 all_records.setdefault(t_name, []).extend(
                     [r.data for r in seed_res.records]
                 )
@@ -858,7 +904,7 @@ async def run_generation_background(
                     status="Running",
                     progress=pct,
                     duration=elapsed,
-                    details={"progress": list(progress_map.values())},
+                    details=get_metadata_details(),
                 )
 
                 await asyncio.sleep(0.02)
@@ -905,7 +951,7 @@ async def run_generation_background(
                 duration=elapsed,
                 finished_at=datetime.utcnow().isoformat() + "Z",
                 result_summary="Generation cancelled by user.",
-                details={"progress": list(progress_map.values())},
+                details=get_metadata_details(),
             )
         else:
             status_dict["status"] = "Completed"
@@ -934,7 +980,7 @@ async def run_generation_background(
                 duration=elapsed,
                 finished_at=datetime.utcnow().isoformat() + "Z",
                 result_summary=f"Successfully generated {total_rows_generated_acc} rows.",
-                details={"progress": list(progress_map.values())},
+                details=get_metadata_details(),
             )
 
     except Exception as e:
@@ -971,7 +1017,7 @@ async def run_generation_background(
             finished_at=datetime.utcnow().isoformat() + "Z",
             error_message=str(e),
             result_summary=f"Generation failed: {e!s}",
-            details={"progress": list(progress_map.values())},
+            details=get_metadata_details(),
         )
 
 
@@ -983,10 +1029,19 @@ async def start_generation(
 ) -> GenerateResponseModel:
     """Starts synthetic data generation as a background workflow task."""
     import json
+    import random
     import uuid
     from datetime import datetime
 
+    from app.seeder.batch_engine import calculate_batch_size
+
     workflow_id = str(uuid.uuid4())
+
+    # Always auto-generate seed internally
+    seed = random.randint(1, 1000000)  # noqa: S311
+
+    # Auto-calculate batch size
+    batch_size = calculate_batch_size(request.schema_state, request.row_targets)
 
     # Initialize Queued status in Redis
     progress = [
@@ -1022,6 +1077,12 @@ async def start_generation(
         progress=0.0,
         started_at=datetime.utcnow().isoformat() + "Z",
         result_summary="Scheduled synthetic data generation.",
+        details={
+            "progress": [p.model_dump(by_alias=True) for p in progress],
+            "generatedSeed": seed,
+            "selectedBatchSize": batch_size,
+            "batchSelectionStrategy": "Auto",
+        },
     )
 
     # Run the generation background task
@@ -1030,8 +1091,8 @@ async def start_generation(
         workflow_id,
         request.schema_state,
         request.row_targets,
-        request.seed,
-        request.batch_size,
+        seed,
+        batch_size,
         request.output_format,
         db,
     )
@@ -1096,6 +1157,30 @@ async def cancel_generation(
         "status": "success",
         "message": "Cancellation signal sent successfully.",
     }
+
+
+@router.get("/generate/{workflow_id}/preview")
+async def get_preview_data(
+    workflow_id: str,
+    db: RedisType = Depends(get_redis),
+) -> dict[str, Any]:
+    """Retrieve generated records from Redis for UI preview."""
+    import json
+
+    records_bytes = await db.get(f"generation:{workflow_id}:records")
+    if not records_bytes:
+        raise HTTPException(
+            status_code=404, detail="No generated records found for this session."
+        )
+    try:
+        res = json.loads(_safe_decode(records_bytes))
+        if isinstance(res, dict):
+            return res
+        return {}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to decode generated data: {e!s}"
+        ) from e
 
 
 @router.get("/generate/{workflow_id}/download")

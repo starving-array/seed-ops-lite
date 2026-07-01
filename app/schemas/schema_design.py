@@ -84,8 +84,6 @@ class AIAssistantResponse(BaseModel):
 class GenerateRequestModel(BaseModel):
     schema_state: SchemaModel = Field(..., alias="schemaState")
     row_targets: dict[str, int] = Field(..., alias="rowTargets")
-    seed: int | None = None
-    batch_size: int = Field(default=100, alias="batchSize")
     output_format: str = Field(default="json", alias="outputFormat")
 
     class Config:
@@ -127,7 +125,7 @@ class JobModel(BaseModel):
     finished_at: str | None = Field(default=None, alias="finishedAt")
     duration: float = 0.0
     progress: float = 0.0
-    owner: str = Field(default="admin", alias="owner")
+    owner: str | None = Field(default=None, alias="owner")
     result_summary: str | None = Field(default=None, alias="resultSummary")
     error_message: str | None = Field(default=None, alias="errorMessage")
     details: dict[str, Any] = Field(default_factory=dict)

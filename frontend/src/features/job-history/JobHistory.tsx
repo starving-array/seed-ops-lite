@@ -324,12 +324,14 @@ export const JobHistory = () => {
                     {selectedJob.duration.toFixed(1)}s
                   </span>
                 </div>
-                <div className="p-3 bg-slate-950/30 rounded-xl border border-slate-850">
-                  <span className="text-slate-500 block mb-0.5">Operation Owner</span>
-                  <span className="font-bold text-slate-200 text-sm">
-                    {selectedJob.owner}
-                  </span>
-                </div>
+                {selectedJob.owner && (
+                  <div className="p-3 bg-slate-950/30 rounded-xl border border-slate-850">
+                    <span className="text-slate-500 block mb-0.5">Operation Owner</span>
+                    <span className="font-bold text-slate-200 text-sm">
+                      {selectedJob.owner}
+                    </span>
+                  </div>
+                )}
                 <div className="p-3 bg-slate-950/30 rounded-xl border border-slate-850">
                   <span className="text-slate-500 block mb-0.5">Start Time</span>
                   <span className="font-semibold text-slate-300 font-mono text-[10px]">

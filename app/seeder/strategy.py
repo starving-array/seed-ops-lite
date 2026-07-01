@@ -11,9 +11,19 @@ class StrategyRegistry:
 
     def __init__(self) -> None:
         self._registry: dict[str, GenerationStrategy] = {}
-        # Register default mappings
         self.register_deterministic_types(
-            ["uuid", "id", "date", "boolean", "enum", "numeric_range", "rule_based"]
+            [
+                "uuid",
+                "id",
+                "date",
+                "boolean",
+                "enum",
+                "numeric_range",
+                "rule_based",
+                "email",
+                "email_address",
+                "emailaddress",
+            ]
         )
         self.register_ai_types(
             [

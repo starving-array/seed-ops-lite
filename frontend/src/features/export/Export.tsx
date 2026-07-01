@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Button,
   Card,
@@ -13,6 +14,8 @@ import { useNotifications } from '../../context/NotificationContext'
 import { API_CONFIG } from '../../api/config'
 
 export const Export = () => {
+  const [searchParams] = useSearchParams()
+  const initialWorkflowId = searchParams.get('workflowId')
   const { addNotification } = useNotifications()
   const [datasets, setDatasets] = useState<ExportableDataset[]>([])
   const [exportJobs, setExportJobs] = useState<Job[]>([])
@@ -74,6 +77,16 @@ export const Export = () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
     }
   }, [fetchExportJobs])
+
+  // Auto-select dataset if initialWorkflowId query param is provided
+  useEffect(() => {
+    if (initialWorkflowId && datasets.length > 0) {
+      const match = datasets.find((d) => d.workflowId === initialWorkflowId)
+      if (match) {
+        setSelectedDataset(match)
+      }
+    }
+  }, [initialWorkflowId, datasets])
 
   // Select all tables by default when selected dataset changes
   useEffect(() => {

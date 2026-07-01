@@ -164,7 +164,11 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
                     elif f_annotation is bool:
                         field_values[f_name] = True
                     elif f_name == "email":
-                        field_values[f_name] = f"user{i+1}@example.com"
+                        from app.core.settings.config import settings
+
+                        field_values[f_name] = (
+                            f"user{i+1}@{settings.DEFAULT_EMAIL_DOMAIN}"
+                        )
                     else:
                         field_values[f_name] = f"mock_{f_name}_{i+1}"
                 dummy_record = dynamic_record_cls(**field_values)
@@ -221,8 +225,6 @@ async def test_e2e_complete_workflow(client: AsyncClient) -> None:
         generate_payload = {
             "schemaState": schema_state,
             "rowTargets": {"users": 5, "orders": 5},
-            "seed": 42,
-            "batchSize": 5,
             "outputFormat": "json",
         }
         start_gen_resp = await client.post("/schema/generate", json=generate_payload)

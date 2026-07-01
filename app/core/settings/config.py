@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = Field(default=3)
     LLM_TIMEOUT: float = Field(default=30.0)
 
+    # Email Branding Configurations
+    DEFAULT_EMAIL_DOMAIN: str = Field(default="seedops.com")
+
+    # Batch Size Threshold Configurations
+    BATCH_THRESHOLD_SMALL: int = Field(default=100)
+    BATCH_THRESHOLD_MEDIUM: int = Field(default=1000)
+    BATCH_THRESHOLD_LARGE: int = Field(default=10000)
+
+    BATCH_SIZE_SMALL: int = Field(default=10)
+    BATCH_SIZE_MEDIUM: int = Field(default=50)
+    BATCH_SIZE_LARGE: int = Field(default=250)
+    BATCH_SIZE_XLARGE: int = Field(default=500)
+
     def _update_snapshot(self, config: Any) -> None:
         """Atomically update legacy settings using a single dict update under the GIL."""
         new_values = {}

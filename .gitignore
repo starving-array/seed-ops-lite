@@ -197,3 +197,7 @@ pnpm-debug.log*
 !docs/
 !examples/
 !tests/
+
+
+# Docs 
+docs/learning/

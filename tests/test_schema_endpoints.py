@@ -203,8 +203,6 @@ async def test_start_generation(client: AsyncClient) -> None:
             "relationships": [],
         },
         "rowTargets": {"users": 10},
-        "seed": 42,
-        "batchSize": 5,
         "outputFormat": "json",
     }
     response = await client.post("/schema/generate", json=payload)
@@ -380,3 +378,119 @@ async def test_download_exported_file_not_found(client: AsyncClient) -> None:
     response = await client.get("/schema/export/missing-export-id/download")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_start_generation_auto_seed_and_batch_size(client: AsyncClient) -> None:
+    """Test start synthetic data generation without seed and batchSize to verify automatic defaults and metadata."""
+    payload = {
+        "schemaState": {
+            "tables": [
+                {
+                    "id": "1",
+                    "name": "users",
+                    "columns": [
+                        {
+                            "id": "c1",
+                            "name": "id",
+                            "type": "INTEGER",
+                            "isPrimaryKey": True,
+                            "isNullable": False,
+                            "defaultValue": "",
+                        }
+                    ],
+                }
+            ],
+            "relationships": [],
+        },
+        "rowTargets": {"users": 10},
+        "outputFormat": "json",
+    }
+    response = await client.post("/schema/generate", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "workflowId" in data
+    assert data["status"] == "Queued"
+    workflow_id = data["workflowId"]
+
+    # Wait a tiny bit and fetch job details to verify metadata storage
+    import asyncio
+
+    await asyncio.sleep(0.1)
+
+    detail_resp = await client.get(f"/schema/jobs/{workflow_id}")
+    assert detail_resp.status_code == 200
+    job_data = detail_resp.json()
+    assert "details" in job_data
+    details = job_data["details"]
+    assert "generatedSeed" in details
+    assert isinstance(details["generatedSeed"], int)
+    assert "selectedBatchSize" in details
+    assert isinstance(details["selectedBatchSize"], int)
+    assert details["batchSelectionStrategy"] == "Auto"
+    assert job_data.get("owner") is None
+
+
+def test_ui_simplified_no_seed_no_batch_size_inputs() -> None:
+    """Verify that Random Seed and Batch Size fields have been removed from the UI source code."""
+    from pathlib import Path
+
+    ui_filepath = Path("frontend/src/features/data-generation/DataGeneration.tsx")
+    assert ui_filepath.exists(), f"UI file not found at {ui_filepath}"
+    with ui_filepath.open(encoding="utf-8") as f:
+        content = f.read()
+
+    # The inputs should no longer exist in the JSX
+    assert 'label="Random Seed' not in content
+    assert 'id="seed"' not in content
+    assert 'label="Batch Size"' not in content
+    assert 'id="batchSize"' not in content
+    assert "Deterministic seed locked" not in content
+
+
+@pytest.mark.asyncio
+async def test_generation_preview_endpoint(client: AsyncClient) -> None:
+    """Test retrieving generated records preview from Redis."""
+    # First, run a short generation job
+    payload = {
+        "schemaState": {
+            "tables": [
+                {
+                    "id": "1",
+                    "name": "users",
+                    "columns": [
+                        {
+                            "id": "c1",
+                            "name": "id",
+                            "type": "INTEGER",
+                            "isPrimaryKey": True,
+                            "isNullable": False,
+                            "defaultValue": "",
+                        }
+                    ],
+                }
+            ],
+            "relationships": [],
+        },
+        "rowTargets": {"users": 3},
+        "outputFormat": "json",
+    }
+    response = await client.post("/schema/generate", json=payload)
+    assert response.status_code == 200
+    workflow_id = response.json()["workflowId"]
+
+    # Wait for completion
+    import asyncio
+
+    for _ in range(30):
+        status_resp = await client.get(f"/schema/generate/{workflow_id}")
+        if status_resp.json()["status"] == "Completed":
+            break
+        await asyncio.sleep(0.01)
+
+    # Fetch preview data
+    preview_resp = await client.get(f"/schema/generate/{workflow_id}/preview")
+    assert preview_resp.status_code == 200
+    preview_data = preview_resp.json()
+    assert "users" in preview_data
+    assert len(preview_data["users"]) == 3

@@ -53,8 +53,6 @@ export const schemaService = {
   startGeneration: async (payload: {
     schemaState: { tables: Table[]; relationships: Relationship[] }
     rowTargets: Record<string, number>
-    seed?: number | null
-    batchSize: number
     outputFormat: string
   }): Promise<ApiResponse<GenerationResponse>> => {
     return apiClient.post<GenerationResponse>('/schema/generate', payload)
@@ -62,6 +60,10 @@ export const schemaService = {
 
   getGenerationStatus: async (workflowId: string): Promise<ApiResponse<GenerationResponse>> => {
     return apiClient.get<GenerationResponse>(`/schema/generate/${workflowId}`)
+  },
+
+  getPreviewData: async (workflowId: string): Promise<ApiResponse<Record<string, any[]>>> => {
+    return apiClient.get<Record<string, any[]>>(`/schema/generate/${workflowId}/preview`)
   },
 
   cancelGeneration: async (workflowId: string): Promise<ApiResponse<{ status: string; message: string }>> => {
@@ -144,7 +146,7 @@ export interface Job {
   finishedAt?: string | null
   duration: number
   progress: number
-  owner: string
+  owner?: string | null
   resultSummary?: string | null
   errorMessage?: string | null
   details: {

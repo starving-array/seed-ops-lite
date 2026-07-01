@@ -149,6 +149,25 @@ class HybridSeeder:
                     for name in ai_fields:
                         strategy_used[name] = GenerationStrategy.AI
 
+                # Apply branding to email fields
+                from app.core.settings.config import settings
+
+                email_domain = settings.DEFAULT_EMAIL_DOMAIN
+                for f_name, field_def in request.fields.items():
+                    if f_name in merged_data:
+                        val = merged_data[f_name]
+                        if isinstance(val, str) and (
+                            f_name.lower() in ("email", "email_address", "emailaddress")
+                            or field_def.type.lower()
+                            in ("email", "email_address", "emailaddress")
+                        ):
+                            local_part = (
+                                (val.split("@", 1)[0] if "@" in val else val)
+                                .strip()
+                                .lower()
+                            )
+                            merged_data[f_name] = f"{local_part}@{email_domain}"
+
                 # 4. Validate record
                 validation_errors = SeederValidator.validate_record(
                     merged_data, request.fields

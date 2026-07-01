@@ -13,7 +13,7 @@ This document describes the functional specification of the user interface for *
     *   📁 **Projects**: Schema templates and project workspace management.
     *   🛠️ **Schema Generator**: Visual builder for tables, columns, and relationships.
     *   🛡️ **Schema Validation**: Rule validation engine and Gemini-powered AI Assistant.
-    *   ⚙️ **Data Generation**: Row count targets, batch size, and seed configurations.
+    *   ⚙️ **Data Generation**: Row count targets and output format configurations.
     *   ⏱️ **Job History**: Operational audit log for all active and historical jobs.
     *   📥 **Export**: Serializer and downloader workspace.
     *   📈 **Observability**: Live logging, telemetry, and system traces (Placeholder).
@@ -88,19 +88,35 @@ This document describes the functional specification of the user interface for *
         *   **Result**: Renders markdown suggestions showing category, severity (`low`/`medium`/`high`), title, description, and suggested action.
 
 ### 5. Data Generation Page
-*   **Purpose**: Configure row count limits and start background generation tasks.
-*   **Inputs**:
-    *   **Table Target Inputs**: Numeric fields for each configured table (Min: `0`, Default: `100`).
-    *   **Random Seed**: Optional integer field to ensure reproducible dataset mock values.
-    *   **Batch Size**: Slider/number input controlling batch write chunk size (Default: `100`).
-    *   **Output Format**: Select dropdown (`json`, `csv`, `sql`).
-*   **Actions**:
-    *   `Start Generation` Button: Submits targets via `POST /schema/generate`.
-    *   `Cancel` Button: Appears during running generation, triggers `POST /schema/generate/{id}/cancel`.
-*   **States & Progress**:
-    *   **Queued/Running**: Displays a master progress bar (elapsed time vs. target rows count) and individual table progress bars showing rows generated out of the target.
-    *   **Completed**: Triggers success notification and enables the `Download Dataset` button.
-    *   **Failed**: Displays the specific traceback error message.
+*   **Purpose**: Focus exclusively on dataset creation using simplified options, offloading export concerns to the dedicated Export workspace.
+*   **Generation Modes**:
+    *   **Quick Generate (Default)**: Optimized for first-time users. Exposes only a **Dataset Size** selector with presets: `100`, `1,000`, `10,000`, `100,000` records. All table row allocations and batch parameters are determined automatically.
+    *   **Advanced Settings**: Available for detailed configurations. Includes:
+        *   Custom target row inputs per table.
+        *   Toggles to enable/disable specific tables.
+*   **Generation Summary Step**:
+    *   Triggers when clicking "Start/Apply Seeding" from either mode.
+    *   Displays a confirmation box summarizing:
+        *   **Active Tables count**
+        *   **Total Estimated Records**
+        *   **Active Relationships count**
+        *   **Estimated Generation Time**
+        *   **Estimated Heap Memory Usage** (`Low` / `Medium` / `High`)
+        *   **Generation Strategy** (`Automatic`)
+    *   Provides two controls: `Start Generating` (starts the workflow) and `Cancel` (returns to config).
+*   **Running Progress Experience**:
+    *   Displays overall status (Queued/Running).
+    *   Simplifies stats to show: **Current Stage**, **Current Table**, **Rows Generated**, **Overall Progress Bar**, and **Estimated Time Remaining**.
+    *   Suppresses developer-centric details (e.g. Batch Size, Random Seed, internal execution metrics).
+    *   Provides a **Cancel Data Generation** button to gracefully abort the running seeding task.
+*   **Completion Experience**:
+    *   Displays validation success checkmark and statistics: Rows Generated, Duration, and Tables Seeded.
+    *   Offers four user options:
+        *   **Preview Dataset**: Opens an inline modal containing tabbed sheets for reviewing up to 10 sample records from any generated table.
+        *   **Export Dataset**: Navigates the user to the Export workspace (`/export?workflowId=<workflowId>`) with the generated dataset automatically selected.
+        *   **Generate Again**: Resets screen back to default configurations.
+        *   **Return to Dashboard**: Navigates back to the main system dashboard (`/`).
+*   **Failed state**: Displays the error cause and permits resetting the form to reconfigure parameters.
 
 ### 6. Job History Page
 *   **Purpose**: Log and audit trail of operational background jobs.
