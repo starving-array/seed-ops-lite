@@ -11,7 +11,9 @@ dependencies = [
     "pydantic-settings>=2.3.3",
     "redis[hiredis]>=5.0.6",
     "structlog>=24.2.0",
-    "jinja2"
+    "jinja2",
+    "sqlalchemy>=2.0.51",
+    "alembic>=1.18.5",
 ]
 
 [project.scripts]

@@ -38,8 +38,26 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     try:
         from app.core.storage.client import init_storage, is_local_memory_mode
+        from app.platform.providers.sqlite_db import sqlite_db_manager
+
+        # Initialize SQLite datastore and run migrations
+        sqlite_db_manager.initialize()
+
+        # Register platform provider bindings
+        from app.platform.container import register_platform_providers
+        from app.platform.providers.sqlite import SQLitePersistenceProvider
+
+        register_platform_providers(
+            persistence_factory=lambda: SQLitePersistenceProvider()
+        )
 
         await init_storage()
+
+        # Execute legacy datastore migration
+        from app.platform.providers.migration import migrate_redis_to_sqlite
+
+        await migrate_redis_to_sqlite()
+
         if is_local_memory_mode():
             logger.warning(
                 EventID.LOG_WARNING,
@@ -57,6 +75,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Shutdown actions
     logger.info(EventID.APP_STOPPED, "Shutting down SeedOps Lite application...")
     from app.core.storage.client import is_local_memory_mode
+    from app.platform.providers.sqlite_db import sqlite_db_manager
+
+    sqlite_db_manager.shutdown()
 
     if not is_local_memory_mode():
         await redis_manager.disconnect()

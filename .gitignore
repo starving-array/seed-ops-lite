@@ -201,3 +201,7 @@ pnpm-debug.log*
 
 # Docs 
 docs/learning/
+
+# SQLite databases
+storage/
+*.sqlite*

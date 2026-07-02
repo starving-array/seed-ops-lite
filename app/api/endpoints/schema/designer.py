@@ -1,25 +1,35 @@
-import json
-
 from fastapi import Depends, HTTPException, status
 
-from app.api.deps import get_redis
-from app.api.endpoints.schema.helpers import (
-    DEFAULT_SCHEMA,
-    REDIS_KEY,
-    RedisType,
-)
+from app.api.endpoints.schema.helpers import DEFAULT_SCHEMA
+from app.platform.container import get_persistence_provider
+from app.platform.persistence.interfaces import PersistenceProvider
+from app.platform.persistence.resolver import ProjectResolver
 from app.schemas.schema_design import SchemaModel
 
 
 async def load_schema(
-    db: RedisType = Depends(get_redis),
+    db: PersistenceProvider = Depends(get_persistence_provider),
 ) -> SchemaModel:
-    """Loads the currently saved schema state from Redis."""
+    """Loads the currently saved active schema state from SQLite."""
+    project_id = ProjectResolver.get_active_project_id()
     try:
-        raw_state = await db.get(REDIS_KEY)
-        if not raw_state:
-            return SchemaModel(**DEFAULT_SCHEMA)
-        return SchemaModel(**json.loads(raw_state))
+        schema_dict = await db.get_active_schema(project_id=project_id)
+        if not schema_dict:
+            # Verify and ensure default project exists
+            if not await db.get_project(project_id):
+                await db.create_project(project_id, "Default Project")
+
+            schema_dict = await db.save_schema(
+                project_id=project_id,
+                version=1,
+                tables=DEFAULT_SCHEMA["tables"],
+                relationships=DEFAULT_SCHEMA.get("relationships", []),
+            )
+
+        return SchemaModel(
+            tables=schema_dict["tables"],
+            relationships=schema_dict.get("relationships", []),
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -29,12 +39,26 @@ async def load_schema(
 
 async def save_schema(
     schema: SchemaModel,
-    db: RedisType = Depends(get_redis),
+    db: PersistenceProvider = Depends(get_persistence_provider),
 ) -> dict[str, str]:
-    """Saves the current schema state to Redis."""
+    """Saves the current schema state to SQLite."""
+    project_id = ProjectResolver.get_active_project_id()
     try:
-        serialized = json.dumps(schema.model_dump(by_alias=True))
-        await db.set(REDIS_KEY, serialized)
+        # Determine next increment version num
+        current_schema = await db.get_active_schema(project_id=project_id)
+        next_version = 1
+        if current_schema:
+            next_version = current_schema["version"] + 1
+
+        tables_dict = [t.model_dump(by_alias=True) for t in schema.tables]
+        relationships_dict = [r.model_dump(by_alias=True) for r in schema.relationships]
+
+        await db.save_schema(
+            project_id=project_id,
+            version=next_version,
+            tables=tables_dict,
+            relationships=relationships_dict,
+        )
         return {"status": "success", "message": "Schema saved successfully"}
     except Exception as exc:
         raise HTTPException(

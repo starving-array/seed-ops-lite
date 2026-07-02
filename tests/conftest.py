@@ -40,6 +40,34 @@ def app() -> FastAPI:
         return create_app()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database() -> Generator[None, None, None]:
+    """Session-scoped fixture to redirect the database manager to a temporary SQLite file."""
+    import contextlib
+    import tempfile
+    from pathlib import Path
+
+    from app.platform.providers.sqlite_db import sqlite_db_manager
+
+    fd, path = tempfile.mkstemp(suffix="_test.sqlite")
+    import os
+
+    os.close(fd)
+
+    # Override the path and run migrations on the temp database
+    sqlite_db_manager.db_path = path
+    sqlite_db_manager.initialize(run_migrations=True)
+
+    yield
+
+    # Teardown database manager and remove temp file
+    sqlite_db_manager.shutdown()
+    p = Path(path)
+    if p.exists():
+        with contextlib.suppress(OSError):
+            p.unlink()
+
+
 @pytest_asyncio.fixture
 async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     """Fixture for httpx AsyncClient to perform integration testing on FastAPI.
