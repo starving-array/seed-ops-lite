@@ -1,16 +1,19 @@
+import contextlib
 import json
 import time
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
-from app.api.deps import get_redis
+from app.api.deps import get_runtime_provider
 from app.api.endpoints.schema.helpers import (
-    RedisType,
+    RuntimeProviderType,
     _safe_decode,
     update_job,
 )
 from app.api.endpoints.schema.validation import generate_ddl_from_schema
+from app.platform.container import get_persistence_provider
+from app.platform.persistence.interfaces import PersistenceProvider
 from app.schemas.schema_design import (
     GenerateRequestModel,
     GenerateResponseModel,
@@ -28,7 +31,8 @@ async def run_generation_background(
     seed: int | None,
     batch_size: int,
     _output_format: str,
-    db_client: RedisType,
+    db_client: RuntimeProviderType,
+    persistence: PersistenceProvider,
 ) -> None:
     import asyncio
     import json
@@ -132,6 +136,7 @@ async def run_generation_background(
         status="Running",
         progress=0.0,
         details=get_metadata_details(),
+        persistence=persistence,
     )
 
     all_records: dict[str, list[dict[str, Any]]] = {}
@@ -237,7 +242,7 @@ async def run_generation_background(
                     json.dumps(status_dict),
                 )
 
-                # Update Job progress
+                # Update Job progress in RuntimeProvider only (not SQLite for every batch)
                 await update_job(
                     db_client,
                     job_id=workflow_id,
@@ -259,6 +264,14 @@ async def run_generation_background(
                 json.dumps(status_dict),
             )
 
+            # Write generated table records to Parquet using DiskDatasetStorageManager
+            from app.platform.container import get_dataset_storage_manager
+
+            ds_manager = get_dataset_storage_manager()
+            await ds_manager.write_table_dataset(
+                workflow_id, t_name, all_records.get(t_name, [])
+            )
+
         if generation_cancelled:
             for t_name in ordered_tables:
                 if progress_map[t_name]["status"] in ("Pending", "Running"):
@@ -276,7 +289,6 @@ async def run_generation_background(
                 json.dumps(status_dict),
             )
 
-            # Move Job to Cancelled
             pct = (
                 (total_rows_generated_acc / total_records_to_generate) * 100.0
                 if total_records_to_generate > 0
@@ -292,6 +304,7 @@ async def run_generation_background(
                 finished_at=datetime.utcnow().isoformat() + "Z",
                 result_summary="Generation cancelled by user.",
                 details=get_metadata_details(),
+                persistence=persistence,
             )
         else:
             status_dict["status"] = "Completed"
@@ -305,12 +318,26 @@ async def run_generation_background(
                 f"generation:{workflow_id}:status",
                 json.dumps(status_dict),
             )
-            await db_client.set(
-                f"generation:{workflow_id}:records",
-                json.dumps(all_records),
+
+            # Save dataset metadata to SQLite (authoritative source of truth)
+            from app.platform.container import get_dataset_storage_manager
+
+            ds_manager = get_dataset_storage_manager()
+            dataset_dir = ds_manager.get_dataset_storage_path(workflow_id)
+            table_stats = {
+                table_name: {
+                    "rowCount": progress_map[table_name]["rowsGenerated"],
+                    "fileName": f"{table_name}.parquet",
+                }
+                for table_name in ordered_tables
+            }
+            await persistence.save_metadata(
+                job_id=workflow_id,
+                total_rows=total_rows_generated_acc,
+                table_stats=table_stats,
+                folder_path=dataset_dir,
             )
 
-            # Move Job to Completed
             elapsed = time.perf_counter() - start_time
             await update_job(
                 db_client,
@@ -321,6 +348,7 @@ async def run_generation_background(
                 finished_at=datetime.utcnow().isoformat() + "Z",
                 result_summary=f"Successfully generated {total_rows_generated_acc} rows.",
                 details=get_metadata_details(),
+                persistence=persistence,
             )
 
     except Exception as e:
@@ -341,7 +369,6 @@ async def run_generation_background(
             json.dumps(status_dict),
         )
 
-        # Move Job to Failed
         pct = (
             (total_rows_generated_acc / total_records_to_generate) * 100.0
             if total_records_to_generate > 0
@@ -358,6 +385,7 @@ async def run_generation_background(
             error_message=str(e),
             result_summary=f"Generation failed: {e!s}",
             details=get_metadata_details(),
+            persistence=persistence,
         )
 
 
@@ -365,9 +393,14 @@ async def run_generation_background(
 async def start_generation(
     request: GenerateRequestModel,
     background_tasks: BackgroundTasks,
-    db: RedisType = Depends(get_redis),
+    db: RuntimeProviderType = Depends(get_runtime_provider),
+    persistence: PersistenceProvider = Depends(get_persistence_provider),
 ) -> GenerateResponseModel:
-    """Starts synthetic data generation as a background workflow task."""
+    """Starts synthetic data generation as a background workflow task.
+
+    The job record is immediately written to SQLite (durable). Generation
+    progress is cached in the RuntimeProvider for real-time UI polling.
+    """
     import random
     import uuid
     from datetime import datetime
@@ -382,7 +415,6 @@ async def start_generation(
     # Auto-calculate batch size
     batch_size = calculate_batch_size(request.schema_state, request.row_targets)
 
-    # Initialize Queued status in Redis
     progress = [
         TableProgressModel(
             tableName=t.name,
@@ -402,12 +434,20 @@ async def start_generation(
         errors=[],
     )
 
+    # Write initial status to RuntimeProvider cache
     await db.set(
         f"generation:{workflow_id}:status",
         json.dumps(initial_status.model_dump(by_alias=True)),
     )
 
-    # Initialize Job in history as Queued
+    initial_details = {
+        "progress": [p.model_dump(by_alias=True) for p in progress],
+        "generatedSeed": seed,
+        "selectedBatchSize": batch_size,
+        "batchSelectionStrategy": "Auto",
+    }
+
+    # Initialize Job in SQLite (durable) + RuntimeProvider cache
     await update_job(
         db,
         job_id=workflow_id,
@@ -416,12 +456,8 @@ async def start_generation(
         progress=0.0,
         started_at=datetime.utcnow().isoformat() + "Z",
         result_summary="Scheduled synthetic data generation.",
-        details={
-            "progress": [p.model_dump(by_alias=True) for p in progress],
-            "generatedSeed": seed,
-            "selectedBatchSize": batch_size,
-            "batchSelectionStrategy": "Auto",
-        },
+        details=initial_details,
+        persistence=persistence,
     )
 
     # Run the generation background task
@@ -434,6 +470,7 @@ async def start_generation(
         batch_size,
         request.output_format,
         db,
+        persistence,
     )
 
     return initial_status
@@ -442,16 +479,41 @@ async def start_generation(
 @router.get("/generate/{workflow_id}", response_model=GenerateResponseModel)
 async def get_generation_status(
     workflow_id: str,
-    db: RedisType = Depends(get_redis),
+    db: RuntimeProviderType = Depends(get_runtime_provider),
+    persistence: PersistenceProvider = Depends(get_persistence_provider),
 ) -> GenerateResponseModel:
     """Retrieves progress and current status of an active or completed generation workflow."""
-    status_bytes = await db.get(f"generation:{workflow_id}:status")
-    if not status_bytes:
-        raise HTTPException(
-            status_code=404, detail="Generation workflow session not found."
-        )
+    status_dict = None
+    with contextlib.suppress(Exception):
+        status_bytes = await db.get(f"generation:{workflow_id}:status")
+        if status_bytes:
+            status_dict = json.loads(_safe_decode(status_bytes))
 
-    status_dict = json.loads(_safe_decode(status_bytes))
+    if not status_dict:
+        # Fall back to SQLite PersistenceProvider
+        job_dict = await persistence.get_job(workflow_id)
+        if not job_dict:
+            raise HTTPException(
+                status_code=404, detail="Generation workflow session not found."
+            )
+        details = job_dict.get("details") or {}
+        progress_data = details.get("progress") or []
+        duration_ms = (job_dict.get("duration") or 0.0) * 1000.0
+        status_dict = {
+            "workflowId": workflow_id,
+            "status": job_dict.get("status", "Unknown"),
+            "progress": progress_data,
+            "totalRowsGenerated": sum(p.get("rowsGenerated", 0) for p in progress_data),
+            "durationMs": duration_ms,
+            "errors": (
+                [job_dict.get("errorMessage")] if job_dict.get("errorMessage") else []
+            ),
+            "downloadPlaceholder": (
+                f"/schema/generate/{workflow_id}/download"
+                if job_dict.get("status") == "Completed"
+                else None
+            ),
+        }
 
     # Dynamically update duration_ms if it's still running
     if status_dict.get("status") == "Running" and "startTime" in status_dict:
@@ -464,28 +526,41 @@ async def get_generation_status(
 @router.post("/generate/{workflow_id}/cancel")
 async def cancel_generation(
     workflow_id: str,
-    db: RedisType = Depends(get_redis),
+    db: RuntimeProviderType = Depends(get_runtime_provider),
+    persistence: PersistenceProvider | None = Depends(get_persistence_provider),
 ) -> dict[str, str]:
     """Signals cancellation to an active synthetic data generation run."""
     from datetime import datetime
 
-    # Check if workflow exists
-    status_bytes = await db.get(f"generation:{workflow_id}:status")
-    if not status_bytes:
+    # Check if workflow exists — RuntimeProvider first, then SQLite fallback
+    status_bytes = None
+    with contextlib.suppress(Exception):
+        status_bytes = await db.get(f"generation:{workflow_id}:status")
+
+    if not status_bytes and persistence is not None:
+        # RuntimeProvider cache miss — verify the job exists in SQLite
+        job_dict = await persistence.get_job(workflow_id)
+        if not job_dict:
+            raise HTTPException(
+                status_code=404, detail="Generation workflow session not found."
+            )
+    elif not status_bytes:
         raise HTTPException(
             status_code=404, detail="Generation workflow session not found."
         )
 
-    # Write cancel flag
-    await db.set(f"generation:{workflow_id}:cancel", "true")
+    # Write cancel flag to RuntimeProvider (best-effort, failure is non-fatal)
+    with contextlib.suppress(Exception):
+        await db.set(f"generation:{workflow_id}:cancel", "true")
 
-    # Update Job immediately to Cancelled
+    # Update Job immediately to Cancelled in SQLite + RuntimeProvider
     await update_job(
         db,
         job_id=workflow_id,
         status="Cancelled",
         finished_at=datetime.utcnow().isoformat() + "Z",
         result_summary="Generation cancelled by user.",
+        persistence=persistence,
     )
 
     return {
@@ -497,38 +572,89 @@ async def cancel_generation(
 @router.get("/generate/{workflow_id}/preview")
 async def get_preview_data(
     workflow_id: str,
-    db: RedisType = Depends(get_redis),
+    db: RuntimeProviderType = Depends(get_runtime_provider),
 ) -> dict[str, Any]:
-    """Retrieve generated records from Redis for UI preview."""
-    records_bytes = await db.get(f"generation:{workflow_id}:records")
-    if not records_bytes:
+    """Retrieve generated records from RuntimeProvider cache or disk storage for UI preview."""
+    records_bytes = None
+    with contextlib.suppress(Exception):
+        records_bytes = await db.get(f"generation:{workflow_id}:records")
+
+    if records_bytes:
+        with contextlib.suppress(Exception):
+            res = json.loads(_safe_decode(records_bytes))
+            if isinstance(res, dict):
+                return res
+
+    # Fall back to DiskDatasetStorageManager
+    from app.platform.container import get_dataset_storage_manager
+
+    ds_manager = get_dataset_storage_manager()
+    manifest = await ds_manager.get_dataset_metadata(workflow_id)
+    if not manifest:
         raise HTTPException(
             status_code=404, detail="No generated records found for this session."
         )
+
+    preview_records: dict[str, list[dict[str, Any]]] = {}
     try:
-        res = json.loads(_safe_decode(records_bytes))
-        if isinstance(res, dict):
-            return res
-        return {}
+        for table_info in manifest.get("tables", []):
+            t_name = table_info["name"]
+            table_preview = await ds_manager.read_table_dataset_preview(
+                workflow_id, t_name, limit=100
+            )
+            preview_records[t_name] = table_preview
+
+        with contextlib.suppress(Exception):
+            await db.set(
+                f"generation:{workflow_id}:records", json.dumps(preview_records)
+            )
+
+        return preview_records
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to decode generated data: {e!s}"
+            status_code=500, detail=f"Failed to load dataset preview: {e!s}"
         ) from e
 
 
 @router.get("/generate/{workflow_id}/download")
 async def download_generated_data(
     workflow_id: str,
-    db: RedisType = Depends(get_redis),
+    db: RuntimeProviderType = Depends(get_runtime_provider),
+    persistence: PersistenceProvider = Depends(get_persistence_provider),
 ) -> dict[str, Any]:
     """Download placeholder returning generated data stats."""
-    status_bytes = await db.get(f"generation:{workflow_id}:status")
-    if not status_bytes:
-        raise HTTPException(
-            status_code=404, detail="Generation workflow session not found."
-        )
+    status_dict = None
+    with contextlib.suppress(Exception):
+        status_bytes = await db.get(f"generation:{workflow_id}:status")
+        if status_bytes:
+            status_dict = json.loads(_safe_decode(status_bytes))
 
-    status_dict = json.loads(_safe_decode(status_bytes))
+    if not status_dict:
+        # Fall back to SQLite PersistenceProvider
+        job_dict = await persistence.get_job(workflow_id)
+        if not job_dict:
+            raise HTTPException(
+                status_code=404, detail="Generation workflow session not found."
+            )
+        details = job_dict.get("details") or {}
+        progress_data = details.get("progress") or []
+        duration_ms = (job_dict.get("duration") or 0.0) * 1000.0
+        status_dict = {
+            "workflowId": workflow_id,
+            "status": job_dict.get("status", "Unknown"),
+            "progress": progress_data,
+            "totalRowsGenerated": sum(p.get("rowsGenerated", 0) for p in progress_data),
+            "durationMs": duration_ms,
+            "errors": (
+                [job_dict.get("errorMessage")] if job_dict.get("errorMessage") else []
+            ),
+            "downloadPlaceholder": (
+                f"/schema/generate/{workflow_id}/download"
+                if job_dict.get("status") == "Completed"
+                else None
+            ),
+        }
+
     return {
         "status": "success",
         "message": "Synthetic dataset generation complete.",
