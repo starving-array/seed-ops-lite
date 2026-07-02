@@ -1,3 +1,4 @@
+import asyncio
 import builtins
 from collections.abc import Sequence
 from typing import Any
@@ -79,34 +80,63 @@ class MemoryPersistenceProvider(PersistenceProvider):
 class MemoryRuntimeProvider(RuntimeProvider):
     """In-memory implementation of the RuntimeProvider interface for fallback / offline modes."""
 
-    async def get(self, key: str) -> str | None:
-        raise NotImplementedError()
+    def __init__(self) -> None:
+        import fnmatch
+        from collections import defaultdict
 
-    async def set(self, key: str, value: str, expire: int | None = None) -> None:
-        raise NotImplementedError()
+        self._fnmatch = fnmatch
+        self._defaultdict = defaultdict
+        self._cache: dict[str, str] = {}
+        self._sets: dict[str, builtins.set[str]] = self._defaultdict(builtins.set)
+        self._queues: dict[str, asyncio.Queue[str]] = {}
+
+    def _get_queue(self, queue_name: str) -> asyncio.Queue[str]:
+        if queue_name not in self._queues:
+            self._queues[queue_name] = asyncio.Queue()
+        return self._queues[queue_name]
+
+    async def get(self, key: str) -> str | None:
+        return self._cache.get(key)
+
+    async def set(self, key: str, value: str, _expire: int | None = None) -> None:
+        self._cache[key] = value
 
     async def delete(self, *keys: str) -> None:
-        raise NotImplementedError()
+        for key in keys:
+            self._cache.pop(key, None)
+            self._sets.pop(key, None)
 
     async def sadd(self, key: str, *members: str) -> None:
-        raise NotImplementedError()
+        for member in members:
+            self._sets[key].add(member)
 
     async def srem(self, key: str, *members: str) -> None:
-        raise NotImplementedError()
+        if key in self._sets:
+            for member in members:
+                self._sets[key].discard(member)
 
     async def smembers(self, key: str) -> builtins.set[str]:
-        raise NotImplementedError()
+        return self._sets.get(key, builtins.set())
 
     async def keys(self, pattern: str) -> list[str]:
-        raise NotImplementedError()
+        return [k for k in self._cache if self._fnmatch.fnmatch(k, pattern)]
 
     async def push_to_queue(self, queue_name: str, payload: str) -> None:
-        raise NotImplementedError()
+        await self._get_queue(queue_name).put(payload)
 
     async def pop_from_queue(
         self, queue_name: str, timeout_seconds: int = 0
     ) -> str | None:
-        raise NotImplementedError()
+        q = self._get_queue(queue_name)
+        if timeout_seconds > 0:
+            try:
+                return await asyncio.wait_for(q.get(), timeout=timeout_seconds)
+            except TimeoutError:
+                return None
+        else:
+            if q.empty():
+                return None
+            return q.get_nowait()
 
     async def ping(self) -> bool:
-        raise NotImplementedError()
+        return True

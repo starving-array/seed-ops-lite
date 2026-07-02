@@ -37,11 +37,11 @@ def override_redis(app: FastAPI) -> Any:
     mock_redis.sadd = mock_sadd
     mock_redis.smembers = mock_smembers
 
-    from app.api.deps import get_redis
+    from app.api.deps import get_runtime_provider
 
-    app.dependency_overrides[get_redis] = lambda: mock_redis
+    app.dependency_overrides[get_runtime_provider] = lambda: mock_redis
     yield
-    app.dependency_overrides.pop(get_redis, None)
+    app.dependency_overrides.pop(get_runtime_provider, None)
 
 
 @pytest.mark.asyncio

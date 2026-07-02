@@ -24,20 +24,44 @@ def register_platform_providers(
 
 
 def get_persistence_provider() -> PersistenceProvider:
-    """Retrieve the resolved active PersistenceProvider instance."""
-    return container.get(PersistenceProvider)
+    """Retrieve the resolved active PersistenceProvider instance.
+
+    Falls back to SQLitePersistenceProvider if the container has not been
+    initialized (e.g., in test environments without lifespan).
+    """
+    try:
+        return container.get(PersistenceProvider)
+    except ValueError:
+        from app.platform.providers.sqlite import SQLitePersistenceProvider
+
+        return SQLitePersistenceProvider()
 
 
 def get_runtime_provider() -> RuntimeProvider:
     """Retrieve the resolved active RuntimeProvider instance."""
-    return container.get(RuntimeProvider)
+    try:
+        return container.get(RuntimeProvider)
+    except ValueError:
+        from app.platform.runtime.manager import RuntimeManager
+
+        return RuntimeManager()
 
 
 def get_artifact_provider() -> ArtifactProvider:
     """Retrieve the resolved active ArtifactProvider instance."""
-    return container.get(ArtifactProvider)
+    try:
+        return container.get(ArtifactProvider)
+    except ValueError:
+        from app.platform.providers.disk import DiskArtifactProvider
+
+        return DiskArtifactProvider()
 
 
 def get_dataset_storage_manager() -> DatasetStorageManager:
     """Retrieve the resolved active DatasetStorageManager instance."""
-    return container.get(DatasetStorageManager)
+    try:
+        return container.get(DatasetStorageManager)
+    except ValueError:
+        from app.platform.providers.disk import DiskDatasetStorageManager
+
+        return DiskDatasetStorageManager()

@@ -1,9 +1,14 @@
-"""Dependency injection providers for FastAPI endpoints."""
+from app.platform.container import (
+    get_runtime_provider as get_runtime_provider_from_container,
+)
+from app.platform.runtime.interfaces import RuntimeProvider
 
-from app.core.storage.base import BaseStorage
-from app.core.storage.client import get_storage
 
+async def get_runtime_provider() -> RuntimeProvider:
+    """Dependency provider for retrieving the active RuntimeProvider (RuntimeManager).
 
-async def get_redis() -> BaseStorage:
-    """Dependency provider for retrieving the active storage backend (Redis or Memory)."""
-    return get_storage()
+    The RuntimeProvider manages transient runtime data only (queues, progress,
+    cancellation flags, heartbeats, temporary caches). All durable data is
+    stored exclusively in SQLite via SQLitePersistenceProvider.
+    """
+    return get_runtime_provider_from_container()

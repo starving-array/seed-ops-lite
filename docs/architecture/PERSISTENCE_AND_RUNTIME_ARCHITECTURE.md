@@ -6,7 +6,38 @@
 ## 1. Executive Summary & Goal
 The next-generation persistence and runtime architecture for SafeSeedOps (supporting both Lite and Pro editions) transitions the application from a purely transient, cache-bound architecture to a resilient, enterprise-ready layered storage system. 
 
-SQLite acts as the permanent source of truth for configuration, relational schemas, validation history, operational logs, and maintenance tracking. Redis acts as a performance-enhancing runtime cache, message broker, and real-time job progress coordinator. A file-based Dataset Storage Manager manages generated synthetic data (stored in Parquet format) to prevent database bloating and performance degradation.
+The storage architecture is organized under the following hierarchy:
+
+### SQLite (Single Source of Truth)
+SQLite is the **only durable persistence layer** for SafeSeedOps.
+Stores:
+*   Projects
+*   Schemas
+*   Jobs (Historical & State)
+*   Job History
+*   Metadata
+*   Dataset Metadata
+*   Export Metadata
+*   Runtime Configuration
+
+A Redis outage or database reset must NEVER cause any persistent SQLite data to be lost.
+
+### RuntimeProvider (Transient Runtime Cache)
+RuntimeProvider (Redis or Memory fallback) is **not a database**. It serves strictly as a performance-enhancing runtime cache, message broker, and real-time job progress coordinator. Everything stored here must be transient and disposable.
+Stores:
+*   Queue messages
+*   Cancellation flags
+*   Heartbeats
+*   Websocket state
+*   Live progress / status cache
+*   Temporary preview cache
+*   Temporary export payload cache
+
+### DiskDatasetStorageManager (Parquet Storage)
+DiskDatasetStorageManager handles saving synthetic datasets directly to disk in Parquet format with a `manifest.json`.
+Stores:
+*   Generated Datasets (Parquet files)
+*   Dataset manifests
 
 ---
 
@@ -51,25 +82,28 @@ sequenceDiagram
     autonumber
     participant UI as frontend/DataGeneration.tsx
     participant API as api/endpoints/schema/generation.py
-    participant DB as BaseStorage (Redis/Memory)
+    participant SQLite as SQLite Database (Durable)
+    participant Cache as RuntimeProvider (Redis/Memory Cache)
     participant Engine as seeder/seeder.py
     
     UI->>API: POST /schema/generate (RequestModel)
-    API->>DB: set generation:{id}:status -> Queued
-    API->>DB: set jobs:{id} -> Queued
+    API->>Cache: set generation:{id}:status -> Queued
+    API->>SQLite: create_job() -> Queued
+    API->>Cache: set jobs:{id} -> Queued
     API->>API: Spawn run_generation_background task
     API-->>UI: Return GenerateResponseModel (Queued)
     loop Table-by-Table Generation
-        API->>DB: get generation:{id}:cancel
-        Note over API,DB: If canceled, break loop and write status
+        API->>Cache: get generation:{id}:cancel
+        Note over API,Cache: If canceled, break loop and write status
         API->>Engine: seed(SeedRequest)
         Engine-->>API: SeedResponse
-        API->>DB: set generation:{id}:records -> JSON string
-        API->>DB: set generation:{id}:status -> Running (Progress stats)
-        API->>DB: set jobs:{id} -> Running (Progress stats)
+        API->>Cache: set generation:{id}:records -> JSON string
+        API->>Cache: set generation:{id}:status -> Running (Progress stats)
+        API->>Cache: set jobs:{id} -> Running (Progress stats) (cache write only)
     end
-    API->>DB: set generation:{id}:status -> Completed
-    API->>DB: set jobs:{id} -> Completed
+    API->>Cache: set generation:{id}:status -> Completed
+    API->>SQLite: update_job_status() -> Completed
+    API->>Cache: set jobs:{id} -> Completed (cache)
 ```
 
 #### Export Flow
@@ -78,19 +112,22 @@ sequenceDiagram
     autonumber
     participant UI as frontend/Export.tsx
     participant API as api/endpoints/schema/export.py
-    participant DB as BaseStorage (Redis/Memory)
+    participant SQLite as SQLite Database (Durable)
+    participant Cache as RuntimeProvider (Redis/Memory Cache)
     participant Exporter as export/exporter.py
     
     UI->>API: POST /schema/export (ExportSettingsModel)
-    API->>DB: set jobs:{export_id} -> Queued
+    API->>Cache: set jobs:{export_id} -> Queued (cache)
+    API->>SQLite: create_job() -> Queued
     API->>API: Spawn run_export_background task
     API-->>UI: Return JobModel (Queued)
-    API->>DB: get generation:{workflow_id}:records
-    DB-->>API: JSON record bytes
+    API->>Cache: get generation:{workflow_id}:records
+    Cache-->>API: JSON record bytes
     API->>Exporter: export(ExportRequest)
     Exporter-->>API: ExportResult (Serialized formats dict)
-    API->>DB: set export:{export_id}:payload -> hex string
-    API->>DB: set jobs:{export_id} -> Completed
+    API->>Cache: set export:{export_id}:payload -> hex string
+    API->>SQLite: update_job_status() -> Completed
+    API->>Cache: set jobs:{export_id} -> Completed (cache)
 ```
 
 ### 2.4 Current Limitations
@@ -705,7 +742,18 @@ The SQLite Persistence Platform has been stabilized, validated, and baselined:
     *   *Schema Save*: ~9.18 ms
     *   *Schema Load*: ~2.62 ms
 
-*   **Current Active Phase**: Phase 2.3 (Caretaker Daemon implementation).
+*   **Current Active Phase**: Phase 2.4 (planned).
+
+---
+
+## 24. Phase 2.3 Artifact Platform Implementation Details
+
+The Artifact Storage Platform has been fully implemented:
+*   **DiskArtifactProvider**: Implements abstract `ArtifactProvider` wrapping synchronous writes, reads, and purges.
+*   **DiskDatasetStorageManager**: Implements local Parquet serialization using PyArrow. Writes files to `storage/datasets/dataset_{workflow_id}/{table_name}.parquet`.
+*   **Manifest & Checksums**: Generates a standard JSON manifest format containing rows metadata and SHA-256 integrity checksums.
+*   **Streaming Downloads**: Streams Parquet records converted on-the-fly to CSV or multi-table ZIP exports chunk-by-chunk without memory bloating.
+
 
 
 

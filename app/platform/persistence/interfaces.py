@@ -124,6 +124,11 @@ class PersistenceProvider(ABC):
         pass
 
     @abstractmethod
+    async def deactivate_schema(self, project_id: str) -> None:
+        """Deactivate the active schema design."""
+        pass
+
+    @abstractmethod
     async def create_job(
         self, job_id: str, project_id: str, job_type: str, status: str
     ) -> dict[str, Any]:

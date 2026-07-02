@@ -32,6 +32,11 @@ class SchemaRepository(ABC):
         """Load the active schema model for a project."""
         pass
 
+    @abstractmethod
+    async def deactivate_schema(self, project_id: str) -> None:
+        """Deactivate the active schema design."""
+        pass
+
 
 class JobRepository(ABC):
     """Repository interface for background validation and generation jobs."""

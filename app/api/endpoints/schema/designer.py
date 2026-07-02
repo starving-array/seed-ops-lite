@@ -65,3 +65,26 @@ async def save_schema(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save schema: {exc}",
         ) from exc
+
+
+async def put_schema(
+    schema: SchemaModel,
+    db: PersistenceProvider = Depends(get_persistence_provider),
+) -> dict[str, str]:
+    """Updates/Saves the current schema state to SQLite."""
+    return await save_schema(schema, db)
+
+
+async def delete_schema(
+    db: PersistenceProvider = Depends(get_persistence_provider),
+) -> dict[str, str]:
+    """Deactivates/deletes the active schema state in SQLite."""
+    project_id = ProjectResolver.get_active_project_id()
+    try:
+        await db.deactivate_schema(project_id=project_id)
+        return {"status": "success", "message": "Schema deleted successfully"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete schema: {exc}",
+        ) from exc

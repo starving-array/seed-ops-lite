@@ -44,11 +44,28 @@ class SQLiteStatus(BaseModel):
     )
 
 
+class RuntimeStatus(BaseModel):
+    """Detailed health status metrics of the Runtime Platform."""
+
+    provider: str = Field(description="Name of the active runtime provider")
+    redis_status: str = Field(
+        description="Redis liveness status ('healthy' or 'unhealthy')"
+    )
+    connection_status: str = Field(
+        description="Connection state ('connected' or 'disconnected')"
+    )
+    reconnect_count: int = Field(description="Total count of Redis reconnections")
+    mode: str = Field(description="Current active runtime mode ('redis' or 'memory')")
+    last_reconnection_time: str | None = Field(
+        default=None, description="ISO timestamp of last reconnection"
+    )
+
+
 class HealthResponse(BaseModel):
     """Pydantic model representing the health status response."""
 
     status: str = Field(
-        description="Overall status of the application ('healthy' or 'unhealthy')"
+        description="Overall status of the application ('healthy', 'degraded', or 'unhealthy')"
     )
     version: str = Field(description="The application version")
     environment: str = Field(description="The deployment environment")
@@ -60,6 +77,9 @@ class HealthResponse(BaseModel):
         description="The system storage mode ('redis' or 'memory')"
     )
     sqlite_status: SQLiteStatus = Field(description="Detailed health metrics of SQLite")
+    runtime_status: RuntimeStatus = Field(
+        description="Detailed health metrics of the Runtime Platform"
+    )
     services: dict[str, ServiceStatus] = Field(
         description="Dictionary containing services status breakdown"
     )
@@ -116,6 +136,34 @@ async def health_check(response: Response) -> HealthResponse:
         sqlite_details = str(e)
         connection_status = "disconnected"
 
+    from app.platform.container import get_runtime_provider
+    from app.platform.runtime.manager import RuntimeManager
+
+    try:
+        runtime_prov = get_runtime_provider()
+    except Exception:
+        runtime_prov = None
+    rm_provider_name = "unknown"
+    rm_redis_status = "unhealthy"
+    rm_connection_status = "disconnected"
+    rm_reconnect_count = 0
+    rm_mode = "memory"
+    rm_last_reconnect_time = None
+
+    if isinstance(runtime_prov, RuntimeManager):
+        rm_provider_name = (
+            "RedisRuntimeProvider"
+            if runtime_prov.mode == "redis"
+            else "MemoryRuntimeProvider"
+        )
+        rm_redis_status = "healthy" if runtime_prov.mode == "redis" else "unhealthy"
+        rm_connection_status = (
+            "connected" if runtime_prov.mode == "redis" else "disconnected"
+        )
+        rm_reconnect_count = runtime_prov.reconnect_count
+        rm_mode = runtime_prov.mode
+        rm_last_reconnect_time = runtime_prov.last_reconnection_time
+
     services = {
         "redis": ServiceStatus(
             status=redis_status_str,
@@ -127,13 +175,16 @@ async def health_check(response: Response) -> HealthResponse:
         ),
     }
 
-    overall_healthy = (True if local_mem else redis_healthy) and sqlite_healthy
-
-    if not overall_healthy:
+    if not sqlite_healthy:
+        overall_status = "unhealthy"
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    elif not redis_healthy or local_mem:
+        overall_status = "degraded"
+    else:
+        overall_status = "healthy"
 
     return HealthResponse(
-        status="healthy" if overall_healthy else "unhealthy",
+        status=overall_status,
         version=settings.APP_VERSION,
         environment=settings.APP_ENV,
         uptime=round(get_uptime(), 2),
@@ -150,6 +201,14 @@ async def health_check(response: Response) -> HealthResponse:
             migration_status=migration_status,
             pending_migrations=pending_migrations,
             last_successful_migration_at=last_successful_migration_at,
+        ),
+        runtime_status=RuntimeStatus(
+            provider=rm_provider_name,
+            redis_status=rm_redis_status,
+            connection_status=rm_connection_status,
+            reconnect_count=rm_reconnect_count,
+            mode=rm_mode,
+            last_reconnection_time=rm_last_reconnect_time,
         ),
         services=services,
     )

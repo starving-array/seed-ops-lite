@@ -1,12 +1,12 @@
 import re
 from typing import TYPE_CHECKING, Any
 
-from app.core.storage.base import BaseStorage
+from app.platform.runtime.interfaces import RuntimeProvider
 
 if TYPE_CHECKING:
-    RedisType = BaseStorage
+    RuntimeProviderType = RuntimeProvider
 else:
-    RedisType = BaseStorage
+    RuntimeProviderType = RuntimeProvider
 
 REDIS_KEY = "schema_designer:state"
 
@@ -133,7 +133,7 @@ DEFAULT_SCHEMA: dict[str, Any] = {
 
 
 async def update_job(
-    db_client: RedisType,
+    runtime: "RuntimeProviderType",
     job_id: str,
     job_type: str = "generation",
     status: str = "Queued",
@@ -144,12 +144,73 @@ async def update_job(
     result_summary: str | None = None,
     error_message: str | None = None,
     details: dict[str, Any] | None = None,
+    *,
+    persistence: Any = None,
 ) -> None:
+    """Dual-write job state: SQLite (durable) + RuntimeProvider (progress cache).
+
+    Args:
+        runtime: The active RuntimeProvider for ephemeral progress caching.
+        job_id: The unique job identifier.
+        job_type: Type classification of the job (e.g. 'generation', 'export').
+        status: Current job execution status string.
+        progress: Completion percentage 0.0-100.0.
+        started_at: ISO timestamp string when job started.
+        finished_at: ISO timestamp string when job finished.
+        duration: Elapsed execution duration in seconds.
+        result_summary: Human-readable result summary.
+        error_message: Error detail string if failed.
+        details: Arbitrary metadata dictionary for progress tracking.
+        persistence: Optional PersistenceProvider for SQLite writes.
+    """
     import json
     from datetime import datetime
 
+    from app.core.logging.logging import logger
+    from app.telemetry.events import EventID
+
+    # ── SQLite write (durable) ─────────────────────────────────
+    if persistence is not None:
+        try:
+            existing = await persistence.get_job(job_id)
+            if existing is None:
+                # Ensure the project exists before creating the job (FK constraint)
+                project = await persistence.get_project("default")
+                if not project:
+                    await persistence.create_project("default", "Default Project")
+                await persistence.create_job(
+                    job_id=job_id,
+                    project_id="default",
+                    job_type=job_type,
+                    status=status,
+                )
+            await persistence.update_job_status(
+                job_id=job_id,
+                status=status,
+                progress=round(progress, 2),
+                duration=round(duration, 2),
+                result_summary=result_summary,
+                error_message=error_message,
+                details=details,
+            )
+        except Exception as e:
+            logger.error(
+                EventID.LOG_ERROR,
+                f"SQLite persistence write failed for job {job_id}",
+                error=str(e),
+                details={"job_id": job_id, "status": status},
+            )
+            # Publish Domain Event
+            from app.platform.providers.sqlite import DomainEventDispatcher
+
+            DomainEventDispatcher.dispatch(
+                "persistence_failure", {"job_id": job_id, "error": str(e)}
+            )
+            raise
+
+    # ── RuntimeProvider write (ephemeral progress cache) ────────────────────
     job_key = f"jobs:{job_id}"
-    existing_bytes = await db_client.get(job_key)
+    existing_bytes = await runtime.get(job_key)
     if existing_bytes:
         job_dict = json.loads(_safe_decode(existing_bytes))
     else:
@@ -166,7 +227,7 @@ async def update_job(
             "errorMessage": None,
             "details": {},
         }
-        await db_client.sadd("jobs:all_ids", job_id)
+        await runtime.sadd("jobs:all_ids", job_id)
 
     job_dict["status"] = status
     job_dict["progress"] = round(progress, 2)
@@ -181,4 +242,4 @@ async def update_job(
     if details is not None:
         job_dict["details"] = details
 
-    await db_client.set(job_key, json.dumps(job_dict))
+    await runtime.set(job_key, json.dumps(job_dict))

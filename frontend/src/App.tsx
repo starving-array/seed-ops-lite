@@ -281,7 +281,7 @@ function AppContent() {
               <div className="flex items-center gap-2">
                 <span>⚠️</span>
                 <span>
-                  <strong>Local Memory Mode Active:</strong> Redis server is offline. Your schemas, datasets, and history are stored in-memory only and will be lost on server restart.
+                  <strong>Local Runtime Mode Active:</strong> Redis is currently unavailable. Live runtime features (queues, progress tracking and temporary caches) are operating in Local Runtime Mode. Persistent data—including projects, schemas, jobs and datasets—continues to be stored safely in SQLite.
                 </span>
               </div>
               <button

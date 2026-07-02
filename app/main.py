@@ -45,10 +45,25 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Register platform provider bindings
         from app.platform.container import register_platform_providers
+        from app.platform.providers.disk import (
+            DiskArtifactProvider,
+            DiskDatasetStorageManager,
+        )
         from app.platform.providers.sqlite import SQLitePersistenceProvider
+        from app.platform.runtime.manager import RuntimeManager
+
+        sqlite_persistence_instance = SQLitePersistenceProvider()
+        runtime_manager_instance = RuntimeManager()
+        disk_artifact_instance = DiskArtifactProvider()
+        disk_dataset_instance = DiskDatasetStorageManager()
+
+        await runtime_manager_instance.initialize()
 
         register_platform_providers(
-            persistence_factory=lambda: SQLitePersistenceProvider()
+            persistence_factory=lambda: sqlite_persistence_instance,
+            runtime_factory=lambda: runtime_manager_instance,
+            artifact_factory=lambda: disk_artifact_instance,
+            dataset_factory=lambda: disk_dataset_instance,
         )
 
         await init_storage()
@@ -61,7 +76,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         if is_local_memory_mode():
             logger.warning(
                 EventID.LOG_WARNING,
-                "Redis server is unavailable. Switched to Local Memory Mode (data is transient).",
+                "Redis is currently unavailable. Live runtime features (queues, progress tracking and temporary caches) are operating in Local Runtime Mode. Persistent data—including projects, schemas, jobs and datasets—continues to be stored safely in SQLite.",
             )
     except Exception as exc:  # pylint: disable=broad-except
         logger.critical(
@@ -74,8 +89,17 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown actions
     logger.info(EventID.APP_STOPPED, "Shutting down SeedOps Lite application...")
+    import contextlib
+
     from app.core.storage.client import is_local_memory_mode
+    from app.platform.container import get_runtime_provider
     from app.platform.providers.sqlite_db import sqlite_db_manager
+    from app.platform.runtime.manager import RuntimeManager
+
+    with contextlib.suppress(Exception):
+        rm = get_runtime_provider()
+        if isinstance(rm, RuntimeManager):
+            await rm.close()
 
     sqlite_db_manager.shutdown()
 
@@ -97,15 +121,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Configure CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Restrict this in production settings
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     # Register custom correlation ID and error-logging middlewares
     # Note: Middlewares are executed in reverse order of addition.
     # CorrelationIdMiddleware runs first on incoming request.
@@ -113,6 +128,15 @@ def create_app() -> FastAPI:
     # correlation ID context.
     app.add_middleware(ExceptionLoggingMiddleware)
     app.add_middleware(CorrelationIdMiddleware)
+
+    # Configure CORS middleware last so it is executed outer-most on responses/exceptions
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Restrict this in production settings
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Include routers
     app.include_router(api_router)

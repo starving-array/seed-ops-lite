@@ -77,3 +77,14 @@ class DatasetStorageManager(ABC):
     async def verify_dataset_integrity(self, workflow_id: str) -> bool:
         """Verify checksums and record metrics inside a dataset's metadata file."""
         pass
+
+    @abstractmethod
+    def get_dataset_storage_path(self, workflow_id: str) -> str:
+        """Return the canonical storage path string for the dataset identified by workflow_id.
+
+        This is an opaque metadata label (str, not Path) that callers may record in
+        SQLite or log for auditability. Implementations are free to return a filesystem
+        path, a URI, or any other stable identifier — callers must not assume filesystem
+        semantics on the returned value.
+        """
+        pass

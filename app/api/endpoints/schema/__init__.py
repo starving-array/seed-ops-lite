@@ -3,7 +3,12 @@
 from fastapi import APIRouter, status
 
 from app.api.endpoints.schema import export, generation, jobs, validation
-from app.api.endpoints.schema.designer import load_schema, save_schema
+from app.api.endpoints.schema.designer import (
+    delete_schema,
+    load_schema,
+    put_schema,
+    save_schema,
+)
 from app.schemas.schema_design import SchemaModel
 
 router = APIRouter()
@@ -11,6 +16,8 @@ router = APIRouter()
 # Register core designer endpoints directly to the parent schema router
 router.get("", response_model=SchemaModel)(load_schema)
 router.post("", status_code=status.HTTP_200_OK)(save_schema)
+router.put("", status_code=status.HTTP_200_OK)(put_schema)
+router.delete("", status_code=status.HTTP_200_OK)(delete_schema)
 
 # Include refactored sub-routers
 router.include_router(validation.router)

@@ -12,6 +12,20 @@ from httpx import ASGITransport, AsyncClient
 from app.main import create_app
 
 
+@pytest.fixture(autouse=True)
+def reset_di_container() -> Generator[None, None, None]:
+    """Isolate the global DI container for each test to prevent test contamination."""
+    from app.core.lifecycle.container import container
+
+    old_providers = dict(container._providers)
+    old_instances = dict(container._instances)
+    old_singletons = set(container._singletons)
+    yield
+    container._providers = old_providers
+    container._instances = old_instances
+    container._singletons = old_singletons
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     """Create an instance of the default event loop for the test session.

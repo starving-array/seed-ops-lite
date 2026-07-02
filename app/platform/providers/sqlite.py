@@ -1,4 +1,3 @@
-import contextlib
 import datetime
 import json
 import uuid
@@ -207,6 +206,15 @@ class SQLiteSchemaRepository(SchemaRepository):
         except Exception as e:
             raise map_persistence_exception(e) from e
 
+    async def deactivate_schema(self, project_id: str) -> None:
+        try:
+            self.session.query(Schema).filter(
+                Schema.project_id == project_id, Schema.is_active == 1
+            ).update({Schema.is_active: 0})
+            self.session.flush()
+        except Exception as e:
+            raise map_persistence_exception(e) from e
+
 
 class SQLiteSettingsRepository(SettingsRepository):
     """SQLite implementation of system app settings store."""
@@ -272,9 +280,22 @@ class SQLiteJobRepository(JobRepository):
                 return None
             return {
                 "id": job.id,
+                "jobId": job.id,
                 "project_id": job.project_id,
                 "type": job.type,
                 "status": job.status,
+                "progress": job.progress,
+                "startedAt": (
+                    job.started_at.isoformat() + "Z" if job.started_at else None
+                ),
+                "finishedAt": (
+                    job.finished_at.isoformat() + "Z" if job.finished_at else None
+                ),
+                "duration": job.duration,
+                "resultSummary": job.result_summary,
+                "errorMessage": job.error_message,
+                "details": json.loads(job.details_json) if job.details_json else {},
+                "owner": None,
             }
         except Exception as e:
             raise map_persistence_exception(e) from e
@@ -290,6 +311,8 @@ class SQLiteJobRepository(JobRepository):
         details: dict[str, Any] | None = None,
     ) -> None:
         try:
+            import datetime as _dt
+
             job = self.session.execute(
                 select(Job).where(Job.id == job_id)
             ).scalar_one_or_none()
@@ -300,6 +323,11 @@ class SQLiteJobRepository(JobRepository):
                 job.result_summary = result_summary
                 job.error_message = error_message
                 job.details_json = json.dumps(details) if details else None
+                if (
+                    status in ("Completed", "Failed", "Cancelled")
+                    and job.finished_at is None
+                ):
+                    job.finished_at = _dt.datetime.utcnow()
                 self.session.flush()
                 DomainEventDispatcher.dispatch(
                     "job_status_updated", {"job_id": job_id, "status": status}
@@ -311,16 +339,29 @@ class SQLiteJobRepository(JobRepository):
         self, project_id: str | None = None
     ) -> Sequence[dict[str, Any]]:
         try:
-            stmt = select(Job)
+            stmt = select(Job).order_by(Job.started_at.desc())
             if project_id:
                 stmt = stmt.where(Job.project_id == project_id)
             jobs = self.session.execute(stmt).scalars().all()
             return [
                 {
                     "id": job.id,
+                    "jobId": job.id,
                     "project_id": job.project_id,
                     "type": job.type,
                     "status": job.status,
+                    "progress": job.progress,
+                    "startedAt": (
+                        job.started_at.isoformat() + "Z" if job.started_at else None
+                    ),
+                    "finishedAt": (
+                        job.finished_at.isoformat() + "Z" if job.finished_at else None
+                    ),
+                    "duration": job.duration,
+                    "resultSummary": job.result_summary,
+                    "errorMessage": job.error_message,
+                    "details": json.loads(job.details_json) if job.details_json else {},
+                    "owner": None,
                 }
                 for job in jobs
             ]
@@ -674,11 +715,17 @@ class SQLiteUnitOfWork(UnitOfWork):
 
     async def rollback(self) -> None:
         if self.session:
-            with contextlib.suppress(Exception):
+            try:
                 logger.info(
                     EventID.LOG_INFO, "UnitOfWork transaction rollback triggered."
                 )
                 self.session.rollback()
+            except Exception as e:
+                logger.error(
+                    EventID.LOG_ERROR,
+                    "UnitOfWork rollback failed — session may be in an inconsistent state.",
+                    error=str(e),
+                )
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if self.session:
@@ -720,6 +767,11 @@ class SQLitePersistenceProvider(PersistenceProvider):
     async def get_active_schema(self, project_id: str) -> dict[str, Any] | None:
         async with self.unit_of_work() as uow:
             return await uow.schemas.get_active_schema(project_id)
+
+    async def deactivate_schema(self, project_id: str) -> None:
+        async with self.unit_of_work() as uow:
+            await uow.schemas.deactivate_schema(project_id)
+            await uow.commit()
 
     async def create_job(
         self, job_id: str, project_id: str, job_type: str, status: str

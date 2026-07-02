@@ -29,5 +29,17 @@ class PlatformSettings(BaseSettings):
     RUNTIME_PROVIDER: str = "redis"  # 'redis' | 'memory'
     ARTIFACT_PROVIDER: str = "local_disk"  # 'local_disk' | 's3' | 'gcs'
 
+    # Runtime Provider Settings
+    RUNTIME_REDIS_HOST: str = "localhost"
+    RUNTIME_REDIS_PORT: int = 6379
+    RUNTIME_REDIS_PASSWORD: str | None = None
+    RUNTIME_REDIS_TIMEOUT_SECONDS: float = 5.0
+    RUNTIME_REDIS_MAX_CONNECTIONS: int = 10
+
+    # Reconnection & Heartbeat Poll Intervals
+    RUNTIME_RECONNECT_INTERVAL_SECONDS: float = 5.0
+    RUNTIME_HEALTH_POLL_INTERVAL_SECONDS: float = 10.0
+    RUNTIME_MEMORY_FALLBACK_ENABLED: bool = True
+
 
 platform_settings = PlatformSettings()
