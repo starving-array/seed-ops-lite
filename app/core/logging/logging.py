@@ -114,6 +114,7 @@ def configure_logging() -> None:
 
     structlog.configure(
         processors=[
+            structlog.stdlib.filter_by_level,
             *shared_processors,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
@@ -127,15 +128,14 @@ def configure_logging() -> None:
 
     pretty = _is_pretty_mode()
 
+    # Production-grade logging formatters for stdlib routing:
+    # ProcessorFormatter handles converting standard logging.LogRecord to structlog events.
     if pretty:
-        # PrettyConsoleFormatter is a plain callable (not a stdlib Formatter),
-        # so we wrap it inside a ProcessorFormatter with no additional renderer.
         formatter: logging.Formatter = structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=shared_processors,
             processor=PrettyConsoleFormatter(),
         )
     else:
-        # Production: structured JSON output
         formatter = structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=shared_processors,
             processor=(
@@ -147,15 +147,46 @@ def configure_logging() -> None:
 
     handler.setFormatter(formatter)
 
-    root_logger = logging.getLogger()
-    root_logger.handlers = [handler]
+    # Route standard library logs to structlog:
+    # Use structlog.stdlib.LoggerFactory for stdlib logs
+    logging.basicConfig(
+        handlers=[handler],
+        level=logging.INFO,
+        force=True,  # Reset any existing default handlers
+    )
 
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+    root_logger = logging.getLogger()
+    root_logger.handlers = [handler]
     root_logger.setLevel(log_level)
 
-    # Reduce log noise from third-party libraries
+    # Clean and intercept logger handlers to redirect everything to the root handler
+    # This prevents third-party packages from bypassing structlog's console formatter.
+    for name in logging.root.manager.loggerDict:
+        logger_obj = logging.getLogger(name)
+        logger_obj.handlers = []
+        logger_obj.propagate = True
+
+    # Intercept all other loggers to propagate to root, use our formatter, and have NO separate handlers
+    loggers_to_intercept = [
+        "uvicorn",
+        "uvicorn.access",
+        "uvicorn.error",
+        "fastapi",
+        "alembic",
+        "sqlalchemy",
+        "sqlalchemy.engine",
+        "redis",
+        "asyncio",
+    ]
+    for logger_name in loggers_to_intercept:
+        child_logger = logging.getLogger(logger_name)
+        child_logger.handlers = []
+        child_logger.propagate = True
+        child_logger.setLevel(log_level)
+
+    # Reduce log noise from access logs specifically
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.INFO)
 
 
 # Get structured logger instance

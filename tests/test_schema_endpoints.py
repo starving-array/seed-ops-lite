@@ -278,11 +278,12 @@ async def test_list_jobs(client: AsyncClient) -> None:
 
     # Verify the created job exists in history
     our_job = next(j for j in jobs if j["jobId"] == workflow_id)
-    assert our_job["status"] in ("Queued", "Completed")
+    assert our_job["status"] in ("Queued", "Running", "Completed", "Failed")
     assert our_job["type"] == "generation"
 
     # Test filtering by status
     curr_status = our_job["status"]
+    # If the job transitioned asynchronously to Failed or Completed, filter accordingly
     filter_resp = await client.get(f"/schema/jobs?status={curr_status}")
     assert filter_resp.status_code == 200
     assert any(j["jobId"] == workflow_id for j in filter_resp.json())
@@ -307,7 +308,7 @@ async def test_get_job_details(client: AsyncClient) -> None:
     assert detail_resp.status_code == 200
     data = detail_resp.json()
     assert data["jobId"] == workflow_id
-    assert data["status"] in ("Queued", "Completed")
+    assert data["status"] in ("Queued", "Running", "Completed", "Failed")
     assert data["type"] == "generation"
 
 

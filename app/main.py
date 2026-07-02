@@ -10,12 +10,16 @@ from app.config.manager import ConfigurationManager
 # Atomically load configuration on application startup before other core modules initialize
 ConfigurationManager().load_configuration()
 
+from app.core.logging.logging import configure_logging
+
+configure_logging()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.lifecycle.redis import redis_manager
-from app.core.logging.logging import configure_logging, logger
+from app.core.logging.logging import logger
 from app.core.middleware.middleware import (
     CorrelationIdMiddleware,
     ExceptionLoggingMiddleware,
@@ -28,13 +32,11 @@ from app.telemetry.events import EventID
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     """Manages the startup and shutdown lifecycle of the FastAPI application."""
-    # Startup actions
-    configure_logging()
-    logger.info(
-        EventID.APP_STARTED,
-        "Starting SeedOps Lite application...",
-        version=APP_VERSION,
-    )
+    import time
+
+    startup_start = time.perf_counter()
+
+    sqlite_status = "Unknown"
 
     try:
         from app.core.storage.client import init_storage, is_local_memory_mode
@@ -42,6 +44,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Initialize SQLite datastore and run migrations
         sqlite_db_manager.initialize()
+        sqlite_status = "Healthy"
 
         # Register platform provider bindings
         from app.platform.container import register_platform_providers
@@ -73,22 +76,48 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
         await migrate_redis_to_sqlite()
 
-        if is_local_memory_mode():
-            logger.warning(
-                EventID.LOG_WARNING,
-                "Redis is currently unavailable. Live runtime features (queues, progress tracking and temporary caches) are operating in Local Runtime Mode. Persistent data—including projects, schemas, jobs and datasets—continues to be stored safely in SQLite.",
-            )
+        redis_status = "Local Memory Mode" if is_local_memory_mode() else "Healthy"
     except Exception as exc:  # pylint: disable=broad-except
+        sqlite_status = "Unhealthy"
         logger.critical(
             EventID.LOG_ERROR,
             "Failed to initialize critical application dependencies",
             error=str(exc),
         )
 
+    startup_dur = (time.perf_counter() - startup_start) * 1000.0
+
+    # Print clean startup summary block
+    logger.info(
+        EventID.APP_STARTED,
+        "SeedOps Application Startup Summary",
+        application_version=APP_VERSION,
+        environment=settings.APP_ENV,
+        sqlite_status=sqlite_status,
+        redis_status=redis_status,
+        runtime_provider=(
+            "RedisRuntimeProvider"
+            if redis_status == "Healthy"
+            else "LocalMemoryProvider"
+        ),
+        persistence_provider="SQLitePersistenceProvider",
+        artifact_provider="DiskArtifactProvider",
+        dataset_provider="DiskDatasetStorageManager",
+        registered_services=",".join(
+            [
+                "SQLitePersistenceProvider",
+                "RuntimeManager",
+                "DiskArtifactProvider",
+                "DiskDatasetStorageManager",
+            ]
+        ),
+        startup_duration=f"{startup_dur:.2f} ms",
+    )
+
     yield
 
     # Shutdown actions
-    logger.info(EventID.APP_STOPPED, "Shutting down SeedOps Lite application...")
+    shutdown_start = time.perf_counter()
     import contextlib
 
     from app.core.storage.client import is_local_memory_mode
@@ -105,7 +134,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     if not is_local_memory_mode():
         await redis_manager.disconnect()
-    logger.info(EventID.APP_STOPPED, "Application shutdown complete.")
+
+    shutdown_dur = (time.perf_counter() - shutdown_start) * 1000.0
+    logger.info(
+        EventID.APP_STOPPED,
+        "Application Shutdown Summary",
+        shutdown_status="Success",
+        shutdown_duration=f"{shutdown_dur:.2f} ms",
+    )
 
 
 def create_app() -> FastAPI:

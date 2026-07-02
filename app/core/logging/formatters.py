@@ -115,18 +115,24 @@ class PrettyConsoleFormatter:
         inline_parts: list[str] = []
         for key in _INLINE_KEYS:
             if key in event_dict and key not in {"event_id"}:
-                val = event_dict.pop(key)
+                val = event_dict.get(key)
                 if key == "duration_ms" and isinstance(val, int | float):
                     inline_parts.append(f"duration={val:.1f}ms")
                 else:
                     inline_parts.append(f"{key}={val}")
+
+        # Clean remaining dict of inline keys for clean display
+        for key in _INLINE_KEYS:
+            event_dict.pop(key, None)
 
         component = event_dict.pop("component", None)
 
         # Build header components
         level_badge = f"{colour}{_BOLD}[{label}]{_RESET}"
         comp_badge = f"{_DIM}[{component}]{_RESET}" if component else ""
-        ts_badge = f"{_DIM}{timestamp[:19]}{_RESET}" if timestamp else ""
+        ts_badge = (
+            f"{_DIM}{timestamp[:19].replace('T', ' ')}{_RESET}" if timestamp else ""
+        )
 
         header_parts = [p for p in [ts_badge, level_badge, comp_badge] if p]
         header = "  ".join(header_parts)
@@ -145,23 +151,94 @@ class PrettyConsoleFormatter:
 
         exc_info = remaining.pop("exc_info", None)
 
-        is_section = event_id in self._SECTION_EVENTS
+        is_section = (
+            event_id in self._SECTION_EVENTS
+            or "summary" in event.lower()
+            or "started" in event.lower()
+            or "completed" in event.lower()
+        )
         is_error = level in ("error", "critical")
+        is_llm = (
+            event_id in ("LLM-1001", "LLM-1002", "LLM-1003")
+            or "llm" in str(component).lower()
+        )
 
-        if is_section:
-            width = 66
-            top = f"{colour}╔{'═' * width}╗{_RESET}"
-            mid = f"{colour}║{_RESET}  {_BOLD}{event!s:<{width - 2}}{_RESET}{colour}║{_RESET}"
-            bot = f"{colour}╚{'═' * width}╝{_RESET}"
-            lines = [top, mid, bot]
-        elif is_error:
-            lines = [
-                f"{colour}┌─{label}─{'─' * max(0, 55 - len(label))}┐{_RESET}",
-                f"{colour}│{_RESET} {_BOLD}{event}{_RESET}{inline_str}",
-            ]
+        lines: list[str] = []
+
+        if is_llm:
+            border_color = "\033[38;5;75m"  # Steel-blue for LLM
+            lines.append(
+                f"{border_color}┌───[ LLM OBSERVABILITY ]────────────────────────────────────────────────────┐{_RESET}"
+            )
+            lines.append(f"{border_color}│{_RESET}  {_BOLD}{event}{_RESET}{inline_str}")
             for k, v in remaining.items():
-                lines.append(f"{colour}│{_RESET}   {_DIM}{k:<16}{_RESET} = {v}")
-            lines.append(f"{colour}└{'─' * 60}┘{_RESET}")
+                lines.append(f"{border_color}│{_RESET}    {_DIM}{k:<20}{_RESET}: {v}")
+            lines.append(
+                f"{border_color}└────────────────────────────────────────────────────────────────────────────┘{_RESET}"
+            )
+        elif is_section:
+            # Spring Boot style high impact startup/shutdown/workflow completion blocks
+            width = 76
+            border_color = (
+                "\033[38;5;82m"
+                if "completed" in event.lower() or "success" in event.lower()
+                else colour
+            )
+            lines.append(f"{border_color}╔{'═' * width}╗{_RESET}")
+            lines.append(
+                f"{border_color}║{_RESET}  {_BOLD}{event!s:<{width - 4}}{_RESET}  {border_color}║{_RESET}"
+            )
+            if remaining:
+                lines.append(f"{border_color}╠{'═' * width}╣{_RESET}")
+                for k, v in remaining.items():
+                    line_val = f"   {k:<24}: {v}"
+                    lines.append(
+                        f"{border_color}║{_RESET}  {_DIM}{line_val:<{width - 4}}{_RESET}  {border_color}║{_RESET}"
+                    )
+            lines.append(f"{border_color}╚{'═' * width}╝{_RESET}")
+        elif is_error:
+            # Standardized boxed error presenting component, cause, action, root cause
+            border_color = _COLOURS["error"]
+            lines.append(
+                f"{border_color}┌───[ {label} ]─────────────────────────────────────────────────────────────┐{_RESET}"
+            )
+            lines.append(f"{border_color}│{_RESET}  {_BOLD}{event}{_RESET}{inline_str}")
+            lines.append(
+                f"{border_color}├────────────────────────────────────────────────────────────────────────────┤{_RESET}"
+            )
+            lines.append(
+                f"{border_color}│{_RESET}  {_BOLD}Component{_RESET}  : {component or 'Unknown'}"
+            )
+
+            # Extract Cause & Action if present, else default
+            cause = remaining.pop(
+                "cause", remaining.pop("error", "An unexpected system error occurred.")
+            )
+            action = remaining.pop(
+                "action",
+                "Check logs, verify connection settings and configuration parameters.",
+            )
+            root_cause = remaining.pop("root_cause", None) or cause
+
+            lines.append(
+                f"{border_color}│{_RESET}  {_BOLD}Cause{_RESET}      : {cause}"
+            )
+            lines.append(
+                f"{border_color}│{_RESET}  {_BOLD}Action{_RESET}     : {action}"
+            )
+            lines.append(
+                f"{border_color}│{_RESET}  {_BOLD}Root Cause{_RESET} : {root_cause}"
+            )
+
+            if remaining:
+                lines.append(f"{border_color}│{_RESET}  -- Context Details --")
+                for k, v in remaining.items():
+                    lines.append(
+                        f"{border_color}│{_RESET}    {_DIM}{k:<18}{_RESET}: {v}"
+                    )
+            lines.append(
+                f"{border_color}└────────────────────────────────────────────────────────────────────────────┘{_RESET}"
+            )
         else:
             lines = [f"{header}  {event}{inline_str}"]
             for k, v in remaining.items():
