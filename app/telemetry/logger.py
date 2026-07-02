@@ -10,7 +10,15 @@ from app.telemetry.events import EventID
 
 
 class StructuredLogger:
-    """Wrapper around structlog to enforce standardized logging schema."""
+    """Wrapper around structlog to enforce standardized logging schema.
+
+    Supported log levels (in ascending severity):
+        trace  →  debug  →  info  →  success  →  warning  →  error  →  critical
+
+    ``trace`` and ``success`` are custom levels that structlog maps to
+    DEBUG and INFO respectively, with a distinct ``log_level`` label so
+    they render correctly in the PrettyConsoleFormatter.
+    """
 
     def __init__(self, name: str | None = None) -> None:
         """Initialize StructuredLogger.
@@ -39,6 +47,7 @@ class StructuredLogger:
             "request_id": ctx.request_id,
             "correlation_id": ctx.correlation_id,
             "trace_id": ctx.trace_id,
+            "workflow_id": ctx.workflow_id,
             "component": component or ctx.worker_id or "core",
             "phase": ctx.phase_name,
             "duration_ms": duration_ms,
@@ -49,9 +58,58 @@ class StructuredLogger:
         # Filter out keys with None values to maintain clean serialization
         cleaned_payload = {k: v for k, v in log_payload.items() if v is not None}
 
-        # Route log statement to underlying structlog logger
-        log_method = getattr(self._logger, level)
+        # Custom pseudo-levels: map to the nearest stdlib level so structlog
+        # knows how to route them, but preserve the original label.
+        if level == "trace":
+            cleaned_payload.setdefault("log_level", "trace")
+            log_method = self._logger.debug
+        elif level == "success":
+            cleaned_payload.setdefault("log_level", "success")
+            log_method = self._logger.info
+        else:
+            log_method = getattr(self._logger, level)
+
         log_method(message, **cleaned_payload)
+
+    # ------------------------------------------------------------------
+    # Public level methods — all existing callers work unchanged
+    # ------------------------------------------------------------------
+
+    def trace(
+        self,
+        event_id: EventID | str,
+        message: str,
+        duration_ms: float | None = None,
+        component: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Log structured message at TRACE level (finer-grained than DEBUG)."""
+        self._log(
+            "trace",
+            event_id,
+            message,
+            duration_ms=duration_ms,
+            component=component,
+            **kwargs,
+        )
+
+    def debug(
+        self,
+        event_id: EventID | str,
+        message: str,
+        duration_ms: float | None = None,
+        component: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Log structured message at DEBUG level."""
+        self._log(
+            "debug",
+            event_id,
+            message,
+            duration_ms=duration_ms,
+            component=component,
+            **kwargs,
+        )
 
     def info(
         self,
@@ -64,6 +122,24 @@ class StructuredLogger:
         """Log structured message at INFO level."""
         self._log(
             "info",
+            event_id,
+            message,
+            duration_ms=duration_ms,
+            component=component,
+            **kwargs,
+        )
+
+    def success(
+        self,
+        event_id: EventID | str,
+        message: str,
+        duration_ms: float | None = None,
+        component: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Log structured message at SUCCESS level (positive outcome above INFO)."""
+        self._log(
+            "success",
             event_id,
             message,
             duration_ms=duration_ms,
@@ -136,24 +212,6 @@ class StructuredLogger:
         """Log structured message at CRITICAL level."""
         self._log(
             "critical",
-            event_id,
-            message,
-            duration_ms=duration_ms,
-            component=component,
-            **kwargs,
-        )
-
-    def debug(
-        self,
-        event_id: EventID | str,
-        message: str,
-        duration_ms: float | None = None,
-        component: str | None = None,
-        **kwargs: Any,
-    ) -> None:
-        """Log structured message at DEBUG level."""
-        self._log(
-            "debug",
             event_id,
             message,
             duration_ms=duration_ms,

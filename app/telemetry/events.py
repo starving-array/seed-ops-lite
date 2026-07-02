@@ -58,6 +58,30 @@ class EventID(str, Enum):
     EXPORT_COMPLETED = "EXPORT-1002"
     EXPORT_FAILED = "EXPORT-1003"
 
+    # GENERATION Namespace
+    GENERATION_STARTED = "GEN-1001"
+    GENERATION_COMPLETED = "GEN-1002"
+    GENERATION_FAILED = "GEN-1003"
+
+    # SQLITE Namespace
+    SQLITE_CONNECTED = "SQLITE-1001"
+    SQLITE_MIGRATED = "SQLITE-1002"
+    SQLITE_FAILED = "SQLITE-1003"
+
+    # RUNTIME Namespace (memory / fallback transitions)
+    RUNTIME_MEMORY_ACTIVATED = "RUNTIME-1001"
+    RUNTIME_REDIS_RECOVERED = "RUNTIME-1002"
+    RUNTIME_REDIS_LOST = "RUNTIME-1003"
+    RUNTIME_INITIALIZED = "RUNTIME-1004"
+
+    # CARETAKER Namespace
+    CARETAKER_STARTED = "CARETAKER-1001"
+    CARETAKER_COMPLETED = "CARETAKER-1002"
+    CARETAKER_FAILED = "CARETAKER-1003"
+
+    # PERF Namespace (slow-operation warnings)
+    PERF_SLOW_OPERATION = "PERF-1001"
+
 
 class TelemetryEvent(BaseModel):
     """Pydantic model representing metadata for an entry in the Event Catalog."""

@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # Logging Configurations
     LOG_LEVEL: str = Field(default="info")
     LOG_JSON_FORMAT: bool = Field(default=True)
+    # When True, force the pretty dev console formatter regardless of APP_ENV.
+    # When False (default), the formatter is chosen automatically: pretty in
+    # development, structured JSON in staging/production.
+    LOG_PRETTY: bool = Field(default=False)
+    # Operations exceeding this threshold (ms) are flagged as slow in the logs.
+    SLOW_LOG_THRESHOLD_MS: float = Field(default=500.0)
 
     # LLM Gateway Configurations
     GEMINI_API_KEY: str | None = Field(default=None)

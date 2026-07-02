@@ -25,6 +25,9 @@ class ExecutionContext(BaseModel):
     task_id: str | None = Field(
         default=None, description="Sub-task execution identifier"
     )
+    workflow_id: str | None = Field(
+        default=None, description="Active workflow / generation run identifier"
+    )
     phase_name: str | None = Field(
         default=None, description="Workflow processing phase name"
     )
