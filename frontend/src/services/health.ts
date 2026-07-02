@@ -5,6 +5,7 @@ export interface HealthReport {
   status: string
   version: string
   redis: string
+  storage_mode?: string
 }
 
 export const healthService = {

@@ -37,8 +37,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
     try:
-        # Initialize storage & core dependencies
-        await redis_manager.connect()
+        from app.core.storage.client import init_storage, is_local_memory_mode
+
+        await init_storage()
+        if is_local_memory_mode():
+            logger.warning(
+                EventID.LOG_WARNING,
+                "Redis server is unavailable. Switched to Local Memory Mode (data is transient).",
+            )
     except Exception as exc:  # pylint: disable=broad-except
         logger.critical(
             EventID.LOG_ERROR,
@@ -50,7 +56,10 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Shutdown actions
     logger.info(EventID.APP_STOPPED, "Shutting down SeedOps Lite application...")
-    await redis_manager.disconnect()
+    from app.core.storage.client import is_local_memory_mode
+
+    if not is_local_memory_mode():
+        await redis_manager.disconnect()
     logger.info(EventID.APP_STOPPED, "Application shutdown complete.")
 
 

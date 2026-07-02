@@ -1,19 +1,9 @@
 """Dependency injection providers for FastAPI endpoints."""
 
-from collections.abc import AsyncGenerator
-
-import redis.asyncio as aioredis
-
-from app.core.lifecycle.redis import redis_manager
+from app.core.storage.base import BaseStorage
+from app.core.storage.client import get_storage
 
 
-async def get_redis() -> AsyncGenerator[aioredis.Redis, None]:  # type: ignore[type-arg]
-    """Dependency provider for retrieving a Redis client.
-
-    Retrieves a client from the manager's connection pool.
-    """
-    client = redis_manager.get_client()
-    try:
-        yield client
-    finally:
-        await client.close()
+async def get_redis() -> BaseStorage:
+    """Dependency provider for retrieving the active storage backend (Redis or Memory)."""
+    return get_storage()

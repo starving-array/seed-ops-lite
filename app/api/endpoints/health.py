@@ -37,6 +37,9 @@ class HealthResponse(BaseModel):
     python_version: str = Field(description="The runtime Python version")
     redis_status: str = Field(description="Redis status ('healthy' or 'unhealthy')")
     startup_time: str = Field(description="ISO 8601 formatted startup timestamp")
+    storage_mode: str = Field(
+        description="Active storage backend ('redis' or 'memory')"
+    )
     services: dict[str, ServiceStatus] = Field(
         description="Status breakdown of sub-services"
     )
@@ -58,6 +61,11 @@ async def health_check(response: Response) -> HealthResponse:
     Returns:
         HealthResponse: The structured health status report.
     """
+    from app.core.storage.client import is_local_memory_mode
+
+    local_mem = is_local_memory_mode()
+    storage_mode_str = "memory" if local_mem else "redis"
+
     redis_healthy = await redis_manager.check_health()
     redis_status_str = "healthy" if redis_healthy else "unhealthy"
 
@@ -68,7 +76,7 @@ async def health_check(response: Response) -> HealthResponse:
         )
     }
 
-    overall_healthy = redis_healthy
+    overall_healthy = True if local_mem else redis_healthy
 
     if not overall_healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -81,5 +89,6 @@ async def health_check(response: Response) -> HealthResponse:
         python_version=get_python_version(),
         redis_status=redis_status_str,
         startup_time=get_startup_time_iso(),
+        storage_mode=storage_mode_str,
         services=services,
     )

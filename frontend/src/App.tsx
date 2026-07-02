@@ -66,6 +66,7 @@ function AppContent() {
   const [connectionStatus, setConnectionStatus] = useState<
     'Connected' | 'Connecting' | 'Unavailable' | 'Timeout'
   >('Connecting')
+  const [isLocalMemoryMode, setIsLocalMemoryMode] = useState<boolean>(false)
 
   // End-to-end Backend Connectivity Verification
   useEffect(() => {
@@ -77,6 +78,11 @@ function AppContent() {
 
       if (res.success) {
         setConnectionStatus('Connected')
+        if (res.data && res.data.storage_mode === 'memory') {
+          setIsLocalMemoryMode(true)
+        } else {
+          setIsLocalMemoryMode(false)
+        }
         addNotification({
           type: 'success',
           title: 'Backend Connected',
@@ -268,6 +274,24 @@ function AppContent() {
               </button>
             </div>
           </header>
+
+          {/* Local Memory Mode Notification Banner */}
+          {isLocalMemoryMode && (
+            <div className="bg-amber-600/10 border-b border-amber-500/20 px-6 py-2.5 text-xs text-amber-400 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span>⚠️</span>
+                <span>
+                  <strong>Local Memory Mode Active:</strong> Redis server is offline. Your schemas, datasets, and history are stored in-memory only and will be lost on server restart.
+                </span>
+              </div>
+              <button
+                onClick={() => setIsLocalMemoryMode(false)}
+                className="text-amber-500 hover:text-amber-300 font-bold ml-4"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* 3. MAIN CONTENT (Main landmark) */}
           <main

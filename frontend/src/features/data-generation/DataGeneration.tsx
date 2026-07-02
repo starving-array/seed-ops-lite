@@ -17,7 +17,7 @@ import type { GenerationResponse } from '../../services/schema'
 import { useNotifications } from '../../context/NotificationContext'
 
 export const DataGeneration = () => {
-  const { tables, relationships, isLoading: isSchemaLoading } = useSchema()
+  const { tables, relationships, isLoading: isSchemaLoading, saveStatus } = useSchema()
   const { addNotification } = useNotifications()
   const navigate = useNavigate()
 
@@ -234,6 +234,10 @@ export const DataGeneration = () => {
   const memoryUsageText = totalRecordsToGenerate < 1000 ? 'Low' : totalRecordsToGenerate <= 10000 ? 'Medium' : 'High'
 
   const handleOpenSummary = () => {
+    if (saveStatus === 'failed') {
+      alert('Cannot generate data: The latest schema updates failed to save. Please return to the Schema Designer and resolve any save errors.')
+      return
+    }
     if (totalRecordsToGenerate === 0) {
       alert('Please select at least one table and target row count.')
       return
@@ -551,6 +555,11 @@ export const DataGeneration = () => {
             </div>
 
             <Card className="p-6 space-y-6 bg-slate-900/40 border-slate-800/80">
+              {saveStatus === 'failed' && (
+                <Alert variant="error" title="Schema Save Failed">
+                  Your latest schema changes could not be saved to the database. Data generation is disabled until this is resolved. Return to the Schema Designer and click 'Retry Save'.
+                </Alert>
+              )}
               {generationMode === 'quick' ? (
                 /* QUICK GENERATE SCREEN */
                 <div className="space-y-6 text-left">
@@ -586,7 +595,7 @@ export const DataGeneration = () => {
                     <Button
                       variant="primary"
                       onClick={handleOpenSummary}
-                      disabled={tables.length === 0}
+                      disabled={tables.length === 0 || saveStatus === 'failed'}
                       className="w-full py-3 flex items-center justify-center gap-2 text-sm font-bold shadow-md shadow-indigo-600/10"
                     >
                       ⚡ Start Mock Seeding
@@ -662,7 +671,7 @@ export const DataGeneration = () => {
                     <Button
                       variant="primary"
                       onClick={handleOpenSummary}
-                      disabled={totalRecordsToGenerate === 0}
+                      disabled={totalRecordsToGenerate === 0 || saveStatus === 'failed'}
                       className="w-full py-3 flex items-center justify-center gap-2 text-sm font-bold"
                     >
                       ⚡ Apply & Start Seeding

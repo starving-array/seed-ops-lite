@@ -45,6 +45,7 @@ interface SchemaContextType {
   setRelationships: React.Dispatch<React.SetStateAction<Relationship[]>>
   isLoading: boolean
   isSaving: boolean
+  saveStatus: 'saving' | 'saved' | 'failed' | 'idle'
   triggerSave: () => Promise<void>
 }
 
@@ -55,6 +56,7 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
   const [relationships, setRelationships] = useState<Relationship[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed' | 'idle'>('idle')
   const { addNotification } = useNotifications()
 
   const isLoadedRef = useRef(false)
@@ -102,14 +104,17 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
   const triggerSave = async () => {
     try {
       setIsSaving(true)
+      setSaveStatus('saving')
       const response = await schemaService.saveSchema({ tables, relationships })
       if (!response.success) {
+        setSaveStatus('failed')
         addNotification({
           type: 'error',
           title: 'Manual Save Failed',
           message: response.error?.message || 'Server rejected schema updates.',
         })
       } else {
+        setSaveStatus('saved')
         addNotification({
           type: 'success',
           title: 'Schema Saved',
@@ -117,6 +122,7 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
         })
       }
     } catch (err: any) {
+      setSaveStatus('failed')
       addNotification({
         type: 'error',
         title: 'Network Timeout',
@@ -131,19 +137,23 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!isLoadedRef.current) return
 
+    setSaveStatus('saving')
     const timer = setTimeout(async () => {
       try {
         setIsSaving(true)
         const response = await schemaService.saveSchema({ tables, relationships })
         if (!response.success) {
+          setSaveStatus('failed')
           addNotification({
             type: 'warning',
             title: 'Persist Failure',
             message: response.error?.message || 'Failed to auto-save schema.',
           })
+        } else {
+          setSaveStatus('saved')
         }
       } catch {
-        // Silent save warning, handle in manual save trigger
+        setSaveStatus('failed')
       } finally {
         setIsSaving(false)
       }
@@ -161,6 +171,7 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
         setRelationships,
         isLoading,
         isSaving,
+        saveStatus,
         triggerSave,
       }}
     >

@@ -21,6 +21,7 @@ export const SchemaGenerator = () => {
     setRelationships,
     isLoading,
     isSaving,
+    saveStatus,
     triggerSave,
   } = useSchema()
 
@@ -464,24 +465,30 @@ export const SchemaGenerator = () => {
           subtitle="Interactively build entity relationship tables and columns for database generation."
         />
         <div className="flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-          {isSaving ? (
-            <span className="text-xs text-indigo-400 animate-pulse flex items-center gap-1.5 font-medium px-2">
-              <span>⚡</span> Saving...
+          {saveStatus === 'saving' ? (
+            <span className="text-xs text-indigo-400 flex items-center gap-1.5 font-medium px-2">
+              <Spinner size="sm" /> Saving...
+            </span>
+          ) : saveStatus === 'failed' ? (
+            <span className="text-xs text-red-400 flex items-center gap-1.5 font-medium px-2">
+              <span>⚠️</span> Save failed
             </span>
           ) : (
-            <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium px-2">
-              <span>✓</span> Synced
+            <span className="text-xs text-emerald-400 flex items-center gap-1.5 font-medium px-2 font-mono">
+              <span>✓</span> All changes saved
             </span>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={triggerSave}
-            disabled={isSaving}
-            className="text-xs"
-          >
-            Save Schema
-          </Button>
+          {saveStatus === 'failed' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={triggerSave}
+              disabled={isSaving}
+              className="text-xs border-red-500/30 hover:bg-red-500/10 text-red-400"
+            >
+              Retry Save
+            </Button>
+          )}
         </div>
       </div>
 
