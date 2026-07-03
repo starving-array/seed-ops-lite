@@ -68,51 +68,96 @@ function AppContent() {
   >('Connecting')
   const [isLocalMemoryMode, setIsLocalMemoryMode] = useState<boolean>(false)
 
-  // End-to-end Backend Connectivity Verification
+  // End-to-end Backend Connectivity Verification & Periodic Polling
   useEffect(() => {
-    const verifyConnectivity = async () => {
-      setConnectionStatus('Connecting')
-      setIsLoading(true)
+    let isMounted = true
+    let isFirstRun = true
+    let prevMode: string | null = null
+    let prevStatus: string | null = null
+
+    const verifyConnectivity = async (silent = false) => {
+      if (!silent) {
+        setConnectionStatus('Connecting')
+        setIsLoading(true)
+      }
       const res = await healthService.checkStatus()
-      setIsLoading(false)
+      if (!isMounted) return
+
+      if (!silent) {
+        setIsLoading(false)
+      }
 
       if (res.success) {
-        setConnectionStatus('Connected')
-        if (res.data && res.data.storage_mode === 'memory') {
-          setIsLocalMemoryMode(true)
-        } else {
-          setIsLocalMemoryMode(false)
+        const mode = res.data?.storage_mode || 'redis'
+        const modeBool = mode === 'memory'
+
+        // Detect state shifts and only set states on changes to minimize re-renders
+        if (connectionStatus !== 'Connected' || prevStatus !== 'Connected') {
+          setConnectionStatus('Connected')
         }
-        addNotification({
-          type: 'success',
-          title: 'Backend Connected',
-          message: 'Established end-to-end connectivity with FastAPI backend.',
-          duration: 4000,
-        })
+        if (isLocalMemoryMode !== modeBool || prevMode !== mode) {
+          setIsLocalMemoryMode(modeBool)
+        }
+
+        // Logs concise transitions to console
+        if (prevMode && prevMode !== mode) {
+          console.log(`Runtime Status Updated: ${prevMode.toUpperCase()} -> ${mode.toUpperCase()}`)
+        }
+
+        prevMode = mode
+        prevStatus = 'Connected'
+
+        if (isFirstRun) {
+          addNotification({
+            type: 'success',
+            title: 'Backend Connected',
+            message: 'Established end-to-end connectivity with FastAPI backend.',
+            duration: 4000,
+          })
+          isFirstRun = false
+        }
       } else {
         const err = res.error
-        if (err?.code === 'TIMEOUT') {
-          setConnectionStatus('Timeout')
-          addNotification({
-            type: 'error',
-            title: 'Connection Timeout',
-            message: 'Failed to connect: The backend service request timed out.',
-            duration: 5000,
-          })
-        } else {
-          setConnectionStatus('Unavailable')
-          addNotification({
-            type: 'error',
-            title: 'Backend Offline',
-            message:
-              'Failed to connect: Network error or backend service is unavailable.',
-            duration: 5000,
-          })
+        const statusVal = err?.code === 'TIMEOUT' ? 'Timeout' : 'Unavailable'
+
+        if (connectionStatus !== statusVal || prevStatus !== statusVal) {
+          setConnectionStatus(statusVal)
+          prevStatus = statusVal
+        }
+
+        if (isFirstRun) {
+          if (statusVal === 'Timeout') {
+            addNotification({
+              type: 'error',
+              title: 'Connection Timeout',
+              message: 'Failed to connect: The backend service request timed out.',
+              duration: 5000,
+            })
+          } else {
+            addNotification({
+              type: 'error',
+              title: 'Backend Offline',
+              message: 'Failed to connect: Network error or backend service is unavailable.',
+              duration: 5000,
+            })
+          }
+          isFirstRun = false
         }
       }
     }
 
-    verifyConnectivity()
+    // Initial check
+    verifyConnectivity(false)
+
+    // Polling loop
+    const timerId = setInterval(() => {
+      verifyConnectivity(true)
+    }, 5000)
+
+    return () => {
+      isMounted = false
+      clearInterval(timerId)
+    }
   }, [addNotification, setIsLoading])
 
   // Synchronize Page Title on Location Path Changes

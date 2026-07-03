@@ -37,14 +37,20 @@ def get_persistence_provider() -> PersistenceProvider:
         return SQLitePersistenceProvider()
 
 
+_runtime_manager_instance: RuntimeProvider | None = None
+
+
 def get_runtime_provider() -> RuntimeProvider:
     """Retrieve the resolved active RuntimeProvider instance."""
+    global _runtime_manager_instance  # noqa: PLW0603
     try:
         return container.get(RuntimeProvider)
     except ValueError:
-        from app.platform.runtime.manager import RuntimeManager
+        if _runtime_manager_instance is None:
+            from app.platform.runtime.manager import RuntimeManager
 
-        return RuntimeManager()
+            _runtime_manager_instance = RuntimeManager()
+        return _runtime_manager_instance
 
 
 def get_artifact_provider() -> ArtifactProvider:

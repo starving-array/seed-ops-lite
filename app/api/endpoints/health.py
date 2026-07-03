@@ -3,7 +3,6 @@
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
 
-from app.core.lifecycle.redis import redis_manager
 from app.core.lifecycle.state import (
     get_python_version,
     get_startup_time_iso,
@@ -101,19 +100,31 @@ async def health_check(response: Response) -> HealthResponse:
     Returns:
         HealthResponse: The structured health status report.
     """
+    from app.platform.container import get_runtime_provider
+    from app.platform.runtime.manager import RuntimeManager
+
+    try:
+        runtime_prov = get_runtime_provider()
+    except Exception:
+        runtime_prov = None
+
     from app.core.storage.client import is_local_memory_mode
-    from app.platform.providers.sqlite_db import sqlite_db_manager
 
     local_mem = is_local_memory_mode()
     storage_mode_str = "memory" if local_mem else "redis"
 
-    redis_healthy = await redis_manager.check_health()
+    redis_healthy = False
+    if isinstance(runtime_prov, RuntimeManager) and runtime_prov.mode == "redis":
+        redis_healthy = True
+
     redis_status_str = "healthy" if redis_healthy else "unhealthy"
 
     sqlite_healthy = True
     sqlite_details = None
     migration_version = "none"
     connection_status = "connected"
+
+    from app.platform.providers.sqlite_db import sqlite_db_manager
 
     initialized = False
     migration_status = "uninitialized"
@@ -136,13 +147,6 @@ async def health_check(response: Response) -> HealthResponse:
         sqlite_details = str(e)
         connection_status = "disconnected"
 
-    from app.platform.container import get_runtime_provider
-    from app.platform.runtime.manager import RuntimeManager
-
-    try:
-        runtime_prov = get_runtime_provider()
-    except Exception:
-        runtime_prov = None
     rm_provider_name = "unknown"
     rm_redis_status = "unhealthy"
     rm_connection_status = "disconnected"

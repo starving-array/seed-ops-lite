@@ -90,6 +90,10 @@ class RuntimeManager(RuntimeProvider):
         while self.mode == "memory":
             await asyncio.sleep(interval)
             try:
+                # Disconnect first to ensure a fresh pool is initialized
+                with contextlib.suppress(Exception):
+                    await redis_manager.disconnect()
+
                 # Attempt to refresh pool connections
                 with contextlib.suppress(Exception):
                     await redis_manager.connect()
@@ -112,7 +116,7 @@ class RuntimeManager(RuntimeProvider):
                     )
                     logger.info(
                         EventID.LOG_INFO,
-                        "Redis connection recovered. Switched runtime provider to REDIS.",
+                        "Redis Recovered",
                         details={
                             "reconnect_count": self.reconnect_count,
                             "time": self.last_reconnection_time,

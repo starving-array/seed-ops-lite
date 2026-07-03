@@ -296,11 +296,17 @@ async def test_health_sqlite_healthy_redis_healthy(
     client: AsyncClient,
 ) -> None:
     """SQLite healthy + Redis healthy → HTTP 200, status='healthy'."""
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "redis"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with (
         patch(
-            "app.api.endpoints.health.redis_manager.check_health",
-            new_callable=AsyncMock,
-            return_value=True,
+            "app.platform.container.get_runtime_provider",
+            return_value=mock_rm,
         ),
         patch(
             "app.platform.providers.sqlite_db.sqlite_db_manager.verify_health",
@@ -332,11 +338,17 @@ async def test_health_sqlite_healthy_redis_offline_returns_degraded(
     client: AsyncClient,
 ) -> None:
     """SQLite healthy + Redis offline → HTTP 200, status='degraded'."""
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "memory"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with (
         patch(
-            "app.api.endpoints.health.redis_manager.check_health",
-            new_callable=AsyncMock,
-            return_value=False,
+            "app.platform.container.get_runtime_provider",
+            return_value=mock_rm,
         ),
         patch(
             "app.platform.providers.sqlite_db.sqlite_db_manager.verify_health",
@@ -368,11 +380,17 @@ async def test_health_sqlite_unhealthy_returns_503(
     client: AsyncClient,
 ) -> None:
     """SQLite unhealthy → HTTP 503, status='unhealthy'. Redis state is irrelevant."""
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "redis"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with (
         patch(
-            "app.api.endpoints.health.redis_manager.check_health",
-            new_callable=AsyncMock,
-            return_value=True,  # Redis is healthy — should NOT save the app
+            "app.platform.container.get_runtime_provider",
+            return_value=mock_rm,
         ),
         patch(
             "app.platform.providers.sqlite_db.sqlite_db_manager.verify_health",
@@ -394,11 +412,19 @@ async def test_health_redis_offline_alone_not_unhealthy(
     client: AsyncClient,
 ) -> None:
     """Redis offline alone must NEVER make the application status 'unhealthy'."""
+    from unittest.mock import MagicMock
+
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "memory"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with (
         patch(
-            "app.api.endpoints.health.redis_manager.check_health",
-            new_callable=AsyncMock,
-            return_value=False,
+            "app.platform.container.get_runtime_provider",
+            return_value=mock_rm,
         ),
         patch(
             "app.platform.providers.sqlite_db.sqlite_db_manager.verify_health",

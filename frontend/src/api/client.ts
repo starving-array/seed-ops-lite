@@ -9,7 +9,7 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   retryDelay?: number
 }
 
-class ApiClient {
+export class ApiClient {
   private baseUrl: string
   private defaultHeaders: Record<string, string>
   private timeout: number
@@ -65,11 +65,14 @@ class ApiClient {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
+    let abortHandler: (() => void) | null = null
+
     if (signal) {
-      signal.addEventListener('abort', () => {
+      abortHandler = () => {
         controller.abort()
         clearTimeout(timeoutId)
-      })
+      }
+      signal.addEventListener('abort', abortHandler)
     }
 
     const init: RequestInit = {
@@ -90,7 +93,6 @@ class ApiClient {
 
     try {
       const response = await fetch(url, init)
-      clearTimeout(timeoutId)
 
       const responseText = await response.text()
       let responseData: any = null
@@ -143,8 +145,11 @@ class ApiClient {
         error: apiError,
       }
     } catch (err: any) {
-      clearTimeout(timeoutId)
-      logger.error(`API Request Failed: [${method}] -> ${url}`, err)
+      if (err.name !== 'AbortError') {
+        logger.error(`API Request Failed: [${method}] -> ${url}`, err)
+      } else {
+        logger.debug(`API Request Cancelled: [${method}] -> ${url}`)
+      }
 
       if (retries > 0 && err.name !== 'AbortError') {
         logger.warn(
@@ -157,6 +162,11 @@ class ApiClient {
       return {
         success: false,
         error: this.normalizeError(err),
+      }
+    } finally {
+      clearTimeout(timeoutId)
+      if (signal && abortHandler) {
+        signal.removeEventListener('abort', abortHandler)
       }
     }
   }

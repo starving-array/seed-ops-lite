@@ -1,6 +1,6 @@
 """Integration tests for the health endpoint."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -13,11 +13,17 @@ async def test_health_endpoint_healthy(client: AsyncClient) -> None:
     Args:
         client: The HTTPX async test client.
     """
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "redis"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with (
         patch(
-            "app.core.lifecycle.redis.redis_manager.check_health",
-            new_callable=AsyncMock,
-            return_value=True,
+            "app.platform.container.get_runtime_provider",
+            return_value=mock_rm,
         ),
         patch(
             "app.core.storage.client.is_local_memory_mode",
@@ -41,10 +47,16 @@ async def test_health_endpoint_degraded(client: AsyncClient) -> None:
     Args:
         client: The HTTPX async test client.
     """
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "memory"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with patch(
-        "app.core.lifecycle.redis.redis_manager.check_health",
-        new_callable=AsyncMock,
-        return_value=False,
+        "app.platform.container.get_runtime_provider",
+        return_value=mock_rm,
     ):
         response = await client.get("/health")
         assert response.status_code == 200
@@ -62,15 +74,21 @@ async def test_health_endpoint_unhealthy_sqlite(client: AsyncClient) -> None:
     Args:
         client: The HTTPX async test client.
     """
+    from app.platform.runtime.manager import RuntimeManager
+
+    mock_rm = MagicMock(spec=RuntimeManager)
+    mock_rm.mode = "redis"
+    mock_rm.reconnect_count = 0
+    mock_rm.last_reconnection_time = None
+
     with (
         patch(
             "app.platform.providers.sqlite_db.sqlite_db_manager.verify_health",
             side_effect=Exception("Database connection error"),
         ),
         patch(
-            "app.core.lifecycle.redis.redis_manager.check_health",
-            new_callable=AsyncMock,
-            return_value=True,
+            "app.platform.container.get_runtime_provider",
+            return_value=mock_rm,
         ),
     ):
         response = await client.get("/health")

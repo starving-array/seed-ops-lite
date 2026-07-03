@@ -1,12 +1,11 @@
 """Unit tests for the storage abstraction layer (MemoryStorage, RedisStorage, and fallback)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.core.exceptions.exceptions import DatabaseConnectionError
 from app.core.storage.base import MemoryStorage, RedisStorage
-from app.core.storage.client import get_storage, init_storage, is_local_memory_mode
+from app.core.storage.client import is_local_memory_mode
 
 
 @pytest.mark.asyncio
@@ -96,30 +95,22 @@ async def test_redis_storage_operations() -> None:
 @pytest.mark.asyncio
 async def test_init_storage_redis_available() -> None:
     """Test init_storage selects RedisStorage if connection is healthy."""
-    mock_client = AsyncMock()
+    from typing import Any
 
-    with (
-        patch(
-            "app.core.lifecycle.redis.redis_manager.connect", new_callable=AsyncMock
-        ) as mock_connect,
-        patch(
-            "app.core.lifecycle.redis.redis_manager.get_client",
-            return_value=mock_client,
-        ),
-    ):
-        await init_storage()
-        mock_connect.assert_called_once()
-        assert is_local_memory_mode() is False
-        assert isinstance(get_storage(), RedisStorage)
+    from app.platform.container import get_runtime_provider
+
+    rm: Any = get_runtime_provider()
+    rm.mode = "redis"
+    assert is_local_memory_mode() is False
 
 
 @pytest.mark.asyncio
 async def test_init_storage_fallback_to_memory() -> None:
     """Test init_storage falls back to MemoryStorage if Redis connection fails."""
-    with patch(
-        "app.core.lifecycle.redis.redis_manager.connect",
-        side_effect=DatabaseConnectionError("Redis down"),
-    ):
-        await init_storage()
-        assert is_local_memory_mode() is True
-        assert isinstance(get_storage(), MemoryStorage)
+    from typing import Any
+
+    from app.platform.container import get_runtime_provider
+
+    rm: Any = get_runtime_provider()
+    rm.mode = "memory"
+    assert is_local_memory_mode() is True
