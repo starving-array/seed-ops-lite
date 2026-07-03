@@ -9,7 +9,6 @@ import {
   Spinner,
   Input,
   Checkbox,
-  Badge,
 } from '../../components/ui'
 import { useSchema } from '../../context/SchemaContext'
 import { schemaService } from '../../services/schema'
@@ -34,7 +33,6 @@ export const DataGeneration = () => {
 
   // Schema Validation check on mount
   const [validationPassed, setValidationPassed] = useState<boolean | null>(null)
-  const [validationWarningCount, setValidationWarningCount] = useState<number>(0)
   const [isValidatingSchema, setIsValidatingSchema] = useState<boolean>(true)
 
   // Summary and Run confirmation State
@@ -83,9 +81,7 @@ export const DataGeneration = () => {
         const response = await schemaService.validateSchema({ tables, relationships })
         if (response.success && response.data) {
           const hasErrors = response.data.some((r) => r.severity === 'Error')
-          const warningCount = response.data.filter((r) => r.severity === 'Warning').length
           setValidationPassed(!hasErrors)
-          setValidationWarningCount(warningCount)
         } else {
           setValidationPassed(false)
         }

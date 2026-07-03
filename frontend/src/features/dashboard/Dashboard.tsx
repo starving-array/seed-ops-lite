@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button, Card, Badge, Divider, Grid } from '../../components/ui'
 import { useAppInfo } from '../../context/AppContext'
 import { healthService } from '../../services/health'
+import { StatusDiagnosticsCard } from './StatusDiagnosticsCard'
 
 export const Dashboard = () => {
   const navigate = useNavigate()
@@ -163,35 +164,9 @@ export const Dashboard = () => {
         </Card>
 
         {/* Connection Diagnostics Panel */}
-        <Card className="p-6 space-y-4">
-          <h2 className="text-lg font-bold text-slate-200 flex items-center gap-2">
-            <span>🏥</span> Status Diagnostics
-          </h2>
-          <Divider />
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-1.5 border-b border-slate-800/40">
-              <span className="text-slate-400">FastAPI status</span>
-              <span className="font-semibold text-slate-200">Online</span>
-            </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/40">
-              <span className="text-slate-400">SQLite backend</span>
-              <span className="font-semibold text-slate-200">Connected</span>
-            </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/40">
-              <span className="text-slate-400">Merge conflicts</span>
-              <span className="font-semibold text-slate-200 text-emerald-400">
-                None
-              </span>
-            </div>
-            <div className="flex justify-between py-1.5">
-              <span className="text-slate-400">Git quality gates</span>
-              <span className="font-semibold text-slate-200 text-emerald-400">
-                Passed
-              </span>
-            </div>
-          </div>
-        </Card>
+        <StatusDiagnosticsCard />
       </Grid>
     </div>
   )
 }
+

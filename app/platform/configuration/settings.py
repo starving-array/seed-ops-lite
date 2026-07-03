@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,8 @@ class PlatformSettings(BaseSettings):
         env_prefix="PLATFORM_",
         case_sensitive=False,
         extra="ignore",
+        env_file=".env",
+        env_file_encoding="utf-8",
     )
 
     # SQLite Database Configs
@@ -40,6 +43,127 @@ class PlatformSettings(BaseSettings):
     RUNTIME_RECONNECT_INTERVAL_SECONDS: float = 5.0
     RUNTIME_HEALTH_POLL_INTERVAL_SECONDS: float = 10.0
     RUNTIME_MEMORY_FALLBACK_ENABLED: bool = True
+
+    # Externalized Resilience Settings
+    RUNTIME_CACHE_SYNC_QUEUE_SIZE: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_runtime_cache_sync_queue_size",
+            "runtime_cache_sync_queue_size",
+        ),
+    )
+    RUNTIME_QUEUE_WARNING_PERCENT: int = Field(
+        default=80,
+        validation_alias=AliasChoices(
+            "platform_runtime_queue_warning_percent",
+            "runtime_queue_warning_percent",
+        ),
+    )
+    RUNTIME_SYNC_BATCH_SIZE: int = Field(
+        default=50,
+        validation_alias=AliasChoices(
+            "platform_runtime_sync_batch_size",
+            "runtime_sync_batch_size",
+        ),
+    )
+    RUNTIME_SYNC_RETRY_INTERVAL_SECONDS: float = Field(
+        default=5.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_sync_retry_interval_seconds",
+            "runtime_sync_retry_interval_seconds",
+        ),
+    )
+    RUNTIME_SYNC_MAX_RETRIES: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_runtime_sync_max_retries",
+            "runtime_sync_max_retries",
+        ),
+    )
+    RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(
+        default=1,
+        validation_alias=AliasChoices(
+            "platform_runtime_circuit_breaker_failure_threshold",
+            "runtime_circuit_breaker_failure_threshold",
+        ),
+    )
+    RUNTIME_CIRCUIT_BREAKER_RECOVERY_SECONDS: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_circuit_breaker_recovery_seconds",
+            "runtime_circuit_breaker_recovery_seconds",
+        ),
+    )
+    RUNTIME_HALF_OPEN_MAX_PROBES: int = Field(
+        default=1,
+        validation_alias=AliasChoices(
+            "platform_runtime_half_open_max_probes",
+            "runtime_half_open_max_probes",
+        ),
+    )
+    RUNTIME_RECOVERY_POLL_INTERVAL_SECONDS: float = Field(
+        default=5.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_recovery_poll_interval_seconds",
+            "runtime_recovery_poll_interval_seconds",
+        ),
+    )
+    RUNTIME_WORKER_SHUTDOWN_TIMEOUT_SECONDS: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_worker_shutdown_timeout_seconds",
+            "runtime_worker_shutdown_timeout_seconds",
+        ),
+    )
+    RUNTIME_QUEUE_MAX_EVENT_AGE_SECONDS: float = Field(
+        default=86400.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_queue_max_event_age_seconds",
+            "runtime_queue_max_event_age_seconds",
+        ),
+    )
+    RUNTIME_REDIS_PING_TIMEOUT_SECONDS: float = Field(
+        default=2.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_redis_ping_timeout_seconds",
+            "runtime_redis_ping_timeout_seconds",
+        ),
+    )
+    RUNTIME_SYNC_MAX_CONCURRENT_TASKS: int = Field(
+        default=1,
+        validation_alias=AliasChoices(
+            "platform_runtime_sync_max_concurrent_tasks",
+            "runtime_sync_max_concurrent_tasks",
+        ),
+    )
+    RUNTIME_CACHE_DEFAULT_TTL_SECONDS: int = Field(
+        default=3600,
+        validation_alias=AliasChoices(
+            "platform_runtime_cache_default_ttl_seconds",
+            "runtime_cache_default_ttl_seconds",
+        ),
+    )
+    RUNTIME_MEMORY_CACHE_MAX_ENTRIES: int = Field(
+        default=10000,
+        validation_alias=AliasChoices(
+            "platform_runtime_memory_cache_max_entries",
+            "runtime_memory_cache_max_entries",
+        ),
+    )
+    RUNTIME_MEMORY_EVICTION_BATCH_SIZE: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_runtime_memory_eviction_batch_size",
+            "runtime_memory_eviction_batch_size",
+        ),
+    )
+    RUNTIME_MEMORY_CLEANUP_INTERVAL_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_runtime_memory_cleanup_interval_seconds",
+            "runtime_memory_cleanup_interval_seconds",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

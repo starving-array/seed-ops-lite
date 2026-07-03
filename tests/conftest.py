@@ -12,6 +12,16 @@ from httpx import ASGITransport, AsyncClient
 from app.main import create_app
 
 
+@pytest.fixture(scope="session", autouse=True)
+def override_test_platform_settings() -> None:
+    """Override platform settings with test-friendly values to prevent .env contamination."""
+    from app.platform.configuration.settings import platform_settings
+
+    platform_settings.RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 1
+    platform_settings.RUNTIME_CIRCUIT_BREAKER_RECOVERY_SECONDS = 0.0
+    platform_settings.RUNTIME_RECOVERY_POLL_INTERVAL_SECONDS = 0.05
+
+
 @pytest.fixture(autouse=True)
 def reset_di_container() -> Generator[None, None, None]:
     """Isolate the global DI container for each test to prevent test contamination."""

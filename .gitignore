@@ -201,6 +201,7 @@ pnpm-debug.log*
 
 # Docs 
 docs/learning/
+docs/architecture/brain/
 
 # SQLite databases
 storage/

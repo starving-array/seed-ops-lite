@@ -53,18 +53,17 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             DiskDatasetStorageManager,
         )
         from app.platform.providers.sqlite import SQLitePersistenceProvider
-        from app.platform.runtime.manager import RuntimeManager
+        from app.platform.runtime.manager import runtime_manager
 
         sqlite_persistence_instance = SQLitePersistenceProvider()
-        runtime_manager_instance = RuntimeManager()
         disk_artifact_instance = DiskArtifactProvider()
         disk_dataset_instance = DiskDatasetStorageManager()
 
-        await runtime_manager_instance.initialize()
+        await runtime_manager.initialize()
 
         register_platform_providers(
             persistence_factory=lambda: sqlite_persistence_instance,
-            runtime_factory=lambda: runtime_manager_instance,
+            runtime_factory=lambda: runtime_manager,
             artifact_factory=lambda: disk_artifact_instance,
             dataset_factory=lambda: disk_dataset_instance,
         )

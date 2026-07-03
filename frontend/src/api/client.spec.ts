@@ -3,16 +3,16 @@ import { ApiClient } from './client'
 
 describe('ApiClient Request Cancellation & Lifecycle Tests', () => {
   let client: ApiClient
-  let originalFetch: typeof global.fetch
+  let originalFetch: typeof globalThis.fetch
 
   beforeEach(() => {
     client = new ApiClient()
-    originalFetch = global.fetch
+    originalFetch = globalThis.fetch
     vi.useFakeTimers()
   })
 
   afterEach(() => {
-    global.fetch = originalFetch
+    globalThis.fetch = originalFetch
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -23,9 +23,9 @@ describe('ApiClient Request Cancellation & Lifecycle Tests', () => {
       status: 200,
       text: async () => JSON.stringify({ success: true }),
     }
-    global.fetch = vi.fn().mockResolvedValue(mockResponse)
+    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse)
 
-    const clearSpy = vi.spyOn(global, 'clearTimeout')
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
 
     await client.request('/health')
 
@@ -33,9 +33,9 @@ describe('ApiClient Request Cancellation & Lifecycle Tests', () => {
   })
 
   it('should clean up the timeout timer on request rejection', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error('Network Error'))
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network Error'))
 
-    const clearSpy = vi.spyOn(global, 'clearTimeout')
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
 
     await client.request('/health')
 
@@ -48,7 +48,7 @@ describe('ApiClient Request Cancellation & Lifecycle Tests', () => {
       status: 200,
       text: async () => JSON.stringify({ success: true }),
     }
-    global.fetch = vi.fn().mockResolvedValue(mockResponse)
+    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse)
 
     const controller = new AbortController()
     const signal = controller.signal
@@ -67,7 +67,7 @@ describe('ApiClient Request Cancellation & Lifecycle Tests', () => {
       text: async () => JSON.stringify({ success: true }),
     }
 
-    global.fetch = vi.fn().mockImplementation((_url, init) => {
+    globalThis.fetch = vi.fn().mockImplementation((_url, init) => {
       return new Promise((resolve, reject) => {
         if (init?.signal?.aborted) {
           const err = new Error('The user aborted a request.')
@@ -104,3 +104,4 @@ describe('ApiClient Request Cancellation & Lifecycle Tests', () => {
     expect(res2.success).toBe(true)
   })
 })
+

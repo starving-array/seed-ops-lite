@@ -1,7 +1,9 @@
+import asyncio
 import builtins
 
 from app.core.exceptions.exceptions import DatabaseConnectionError
 from app.core.lifecycle.redis import redis_manager
+from app.platform.configuration.settings import platform_settings
 from app.platform.runtime.interfaces import RuntimeProvider
 
 
@@ -89,6 +91,12 @@ class RedisRuntimeProvider(RuntimeProvider):
     async def ping(self) -> bool:
         try:
             async with redis_manager.get_client() as client:
-                return await client.ping() is True
+                return (
+                    await asyncio.wait_for(
+                        client.ping(),
+                        timeout=platform_settings.RUNTIME_REDIS_PING_TIMEOUT_SECONDS,
+                    )
+                    is True
+                )
         except Exception:
             return False

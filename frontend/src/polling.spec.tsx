@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useEffect, useState } from 'react'
 
 // Mock healthService status check
 const mockCheckStatus = vi.fn()
