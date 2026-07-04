@@ -189,6 +189,29 @@ class MultiAgentScheduler:
             )
             return False
 
+        # 1.1 Dependency completeness check
+        self.planner.add_task(task_id, deps)
+        if not self.planner.is_runnable(task_id):
+            limit = platform_settings.MULTI_AGENT_MAX_SCHEDULING_QUEUE_SIZE
+            if len(self.queue) >= limit:
+                self.statistics.rejected_tasks += 1
+                return False
+            self.queue.append(
+                {
+                    "task_id": task_id,
+                    "agent_id": assigned_agent,
+                    "priority": priority,
+                    "policy": policy,
+                    "timestamp": time.time(),
+                }
+            )
+            self.statistics.queue_utilization = len(self.queue) / limit
+            logger.info(
+                EventID.LOG_INFO,
+                f"Task '{task_id}' queued due to incomplete dependencies.",
+                component="MultiAgentScheduler",
+            )
+            return True
         # 2. Conflict detection
         resolution = self.resolver.resolve_conflicts(
             task_id, assigned_agent, self.active_assignments, {}
@@ -216,7 +239,6 @@ class MultiAgentScheduler:
                     "timestamp": time.time(),
                 }
             )
-            self.planner.add_task(task_id, deps)
             self.statistics.queue_utilization = len(self.queue) / limit
             logger.info(
                 EventID.LOG_INFO,
@@ -237,12 +259,10 @@ class MultiAgentScheduler:
                     "timestamp": time.time(),
                 }
             )
-            self.planner.add_task(task_id, deps)
             return True
 
         # 4. Immediate execution allocation
         self.active_assignments[task_id] = assigned_agent
-        self.planner.add_task(task_id, deps)
 
         # Update utilization metrics
         limit_concurrency = platform_settings.MULTI_AGENT_MAX_CONCURRENT_AGENTS
