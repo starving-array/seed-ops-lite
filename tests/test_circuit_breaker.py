@@ -53,7 +53,7 @@ async def test_circuit_breaker_flow() -> None:
     ):
         # Run loop in background task and cancel it to prevent hanging
         task = asyncio.create_task(rm._poll_redis_recovery())
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.2)
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
