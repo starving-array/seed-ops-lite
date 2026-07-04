@@ -91,7 +91,7 @@ async def test_memory_integration_load_and_save(
         ["key1"],
     )
     assert isinstance(mem, dict)
-    mock_memory_manager.read.assert_called_once()
+    mock_memory_manager.read.assert_called_once()  # type: ignore[attr-defined]
 
     # Save memory
     await adapter.save_variable(
@@ -103,7 +103,7 @@ async def test_memory_integration_load_and_save(
     )
     from app.agents.memory.models import MemoryType
 
-    mock_memory_manager.write.assert_called_once_with(
+    mock_memory_manager.write.assert_called_once_with(  # type: ignore[attr-defined]
         execution_context.workflow_id,
         execution_context.execution_id,
         execution_context.agent_id,
