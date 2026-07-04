@@ -38,6 +38,14 @@ from app.agents.execution.orchestrator import (
     ExecutionSummary,
     TaskDispatcher,
 )
+from app.agents.execution.recovery import (
+    ExecutionCancellationManager,
+    ExecutionCheckpointAdapter,
+    ExecutionRecoveryManager,
+    ExecutionRetryManager,
+    RecoveryResult,
+    RecoveryStatistics,
+)
 from app.agents.execution.scheduler import (
     DependencyResolver,
     ExecutionScheduler,
@@ -94,4 +102,10 @@ __all__ = [
     "ToolExecutionAdapter",
     "RuntimeExecutionAdapter",
     "ExecutionIntegrationResult",
+    "ExecutionRecoveryManager",
+    "ExecutionCancellationManager",
+    "ExecutionRetryManager",
+    "ExecutionCheckpointAdapter",
+    "RecoveryResult",
+    "RecoveryStatistics",
 ]

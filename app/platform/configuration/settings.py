@@ -299,6 +299,41 @@ class PlatformSettings(BaseSettings):
             "integration_health_interval_seconds",
         ),
     )
+    RECOVERY_MAX_ATTEMPTS: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_recovery_max_attempts",
+            "recovery_max_attempts",
+        ),
+    )
+    RECOVERY_CHECKPOINT_FREQUENCY: int = Field(
+        default=1,
+        validation_alias=AliasChoices(
+            "platform_recovery_checkpoint_frequency",
+            "recovery_checkpoint_frequency",
+        ),
+    )
+    RECOVERY_CANCELLATION_TIMEOUT_SECONDS: float = Field(
+        default=15.0,
+        validation_alias=AliasChoices(
+            "platform_recovery_cancellation_timeout_seconds",
+            "recovery_cancellation_timeout_seconds",
+        ),
+    )
+    RECOVERY_TIMEOUT_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_recovery_timeout_seconds",
+            "recovery_timeout_seconds",
+        ),
+    )
+    RECOVERY_RETRY_DELAY_SECONDS: float = Field(
+        default=2.0,
+        validation_alias=AliasChoices(
+            "platform_recovery_retry_delay_seconds",
+            "recovery_retry_delay_seconds",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
