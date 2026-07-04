@@ -607,6 +607,62 @@ class PlatformSettings(BaseSettings):
             "er_layout_algorithm",
         ),
     )
+    PLATFORM_HELP_MAX_TOOLTIP_LENGTH: int = Field(
+        default=500,
+        validation_alias=AliasChoices(
+            "platform_help_max_tooltip_length",
+            "help_max_tooltip_length",
+        ),
+    )
+    PLATFORM_HELP_MAX_RECOMMENDATIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_help_max_recommendations",
+            "help_max_recommendations",
+        ),
+    )
+    PLATFORM_HELP_SEARCH_LIMIT: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "platform_help_search_limit",
+            "help_search_limit",
+        ),
+    )
+    PLATFORM_HELP_CACHE_SIZE: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_help_cache_size",
+            "help_cache_size",
+        ),
+    )
+    PLATFORM_ONBOARDING_MAX_STEPS: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "platform_onboarding_max_steps",
+            "onboarding_max_steps",
+        ),
+    )
+    PLATFORM_ONBOARDING_AUTO_LAUNCH: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "platform_onboarding_auto_launch",
+            "onboarding_auto_launch",
+        ),
+    )
+    PLATFORM_ONBOARDING_SAMPLE_SIZE: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_onboarding_sample_size",
+            "onboarding_sample_size",
+        ),
+    )
+    PLATFORM_ONBOARDING_HINT_LIMIT: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_onboarding_hint_limit",
+            "onboarding_hint_limit",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
