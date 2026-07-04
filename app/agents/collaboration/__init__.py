@@ -111,3 +111,21 @@ __all__ += [
     "SharedMemoryManager",
     "CoordinationManager",
 ]
+
+from app.agents.collaboration.scheduler import (
+    ConflictResolver,
+    CoordinationPlanner,
+    MultiAgentScheduler,
+    ResourceAllocator,
+    SchedulingPolicy,
+    SchedulingStatistics,
+)
+
+__all__ += [
+    "SchedulingPolicy",
+    "SchedulingStatistics",
+    "ConflictResolver",
+    "ResourceAllocator",
+    "CoordinationPlanner",
+    "MultiAgentScheduler",
+]

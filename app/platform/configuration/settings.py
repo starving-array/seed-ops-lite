@@ -411,6 +411,34 @@ class PlatformSettings(BaseSettings):
             "multi_agent_max_snapshot_history",
         ),
     )
+    MULTI_AGENT_MAX_CONCURRENT_AGENTS: int = Field(
+        default=8,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_concurrent_agents",
+            "multi_agent_max_concurrent_agents",
+        ),
+    )
+    MULTI_AGENT_MAX_SCHEDULING_QUEUE_SIZE: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_scheduling_queue_size",
+            "multi_agent_max_scheduling_queue_size",
+        ),
+    )
+    MULTI_AGENT_CONFLICT_RETRY_LIMIT: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_conflict_retry_limit",
+            "multi_agent_conflict_retry_limit",
+        ),
+    )
+    MULTI_AGENT_SCHEDULING_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_scheduling_timeout_seconds",
+            "multi_agent_scheduling_timeout_seconds",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
