@@ -51,3 +51,19 @@ __all__ = [
     "CollaborationCompleted",
     "CollaborationFailed",
 ]
+
+from app.agents.collaboration.delegation import (
+    AssignmentManager,
+    DelegationEngine,
+    DelegationPolicy,
+    DelegationStatistics,
+    DelegationValidator,
+)
+
+__all__ += [
+    "DelegationPolicy",
+    "DelegationStatistics",
+    "DelegationValidator",
+    "AssignmentManager",
+    "DelegationEngine",
+]
