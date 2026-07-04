@@ -334,6 +334,27 @@ class PlatformSettings(BaseSettings):
             "recovery_retry_delay_seconds",
         ),
     )
+    MULTI_AGENT_MAX_TEAM_SIZE: int = Field(
+        default=16,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_team_size",
+            "multi_agent_max_team_size",
+        ),
+    )
+    MULTI_AGENT_MAX_DELEGATION_DEPTH: int = Field(
+        default=4,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_delegation_depth",
+            "multi_agent_max_delegation_depth",
+        ),
+    )
+    MULTI_AGENT_MAX_SHARED_VARIABLES: int = Field(
+        default=128,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_shared_variables",
+            "multi_agent_max_shared_variables",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

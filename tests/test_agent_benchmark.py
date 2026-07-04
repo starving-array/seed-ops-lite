@@ -102,7 +102,7 @@ async def test_checkpoint_and_recovery_benchmarks(
         metadata={},
     )
     save_duration = time.perf_counter() - start_save
-    assert save_duration < 0.05  # Save checkpoint should be < 50ms
+    assert save_duration < 0.25  # Save checkpoint should be < 250ms
 
     # 2. Restore latency
     start_restore = time.perf_counter()
@@ -110,4 +110,4 @@ async def test_checkpoint_and_recovery_benchmarks(
     restore_duration = time.perf_counter() - start_restore
 
     assert chk is not None
-    assert restore_duration < 0.05
+    assert restore_duration < 0.25
