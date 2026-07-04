@@ -236,6 +236,27 @@ class PlatformSettings(BaseSettings):
             "planning_max_branching_factor",
         ),
     )
+    SCHEDULER_MAX_DEPTH: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "platform_scheduler_max_depth",
+            "scheduler_max_depth",
+        ),
+    )
+    SCHEDULER_MAX_STAGES: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "platform_scheduler_max_stages",
+            "scheduler_max_stages",
+        ),
+    )
+    SCHEDULER_MAX_PARALLEL_TASKS: int = Field(
+        default=8,
+        validation_alias=AliasChoices(
+            "platform_scheduler_max_parallel_tasks",
+            "scheduler_max_parallel_tasks",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

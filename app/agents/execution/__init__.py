@@ -22,6 +22,15 @@ from app.agents.execution.models import (
     TaskFailed,
     TaskStarted,
 )
+from app.agents.execution.scheduler import (
+    DependencyResolver,
+    ExecutionScheduler,
+    ReadyQueue,
+    ScheduleResult,
+    SchedulerValidationError,
+    ScheduleStatistics,
+    StageBuilder,
+)
 from app.agents.execution.state_machine import (
     ExecutionStateMachine,
     InvalidStateTransitionError,
@@ -50,4 +59,11 @@ __all__ = [
     "CheckpointRestored",
     "ExecutionStateMachine",
     "InvalidStateTransitionError",
+    "ExecutionScheduler",
+    "DependencyResolver",
+    "StageBuilder",
+    "ReadyQueue",
+    "ScheduleResult",
+    "ScheduleStatistics",
+    "SchedulerValidationError",
 ]
