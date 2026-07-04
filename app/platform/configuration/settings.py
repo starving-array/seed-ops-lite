@@ -523,6 +523,41 @@ class PlatformSettings(BaseSettings):
             "hitl_notification_retention_days",
         ),
     )
+    ENTERPRISE_API_KEY_EXPIRATION_SECONDS: float = Field(
+        default=2592000.0,
+        validation_alias=AliasChoices(
+            "platform_enterprise_api_key_expiration_seconds",
+            "enterprise_api_key_expiration_seconds",
+        ),
+    )
+    ENTERPRISE_MAX_ORGANIZATIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_enterprise_max_organizations",
+            "enterprise_max_organizations",
+        ),
+    )
+    ENTERPRISE_MAX_PROJECTS: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_enterprise_max_projects",
+            "enterprise_max_projects",
+        ),
+    )
+    ENTERPRISE_MAX_MEMBERS: int = Field(
+        default=50,
+        validation_alias=AliasChoices(
+            "platform_enterprise_max_members",
+            "enterprise_max_members",
+        ),
+    )
+    ENTERPRISE_AUDIT_RETENTION_DAYS: int = Field(
+        default=90,
+        validation_alias=AliasChoices(
+            "platform_enterprise_audit_retention_days",
+            "enterprise_audit_retention_days",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
