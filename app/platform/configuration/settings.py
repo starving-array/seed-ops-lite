@@ -257,6 +257,27 @@ class PlatformSettings(BaseSettings):
             "scheduler_max_parallel_tasks",
         ),
     )
+    ORCHESTRATOR_TIMEOUT_SECONDS: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "platform_orchestrator_timeout_seconds",
+            "orchestrator_timeout_seconds",
+        ),
+    )
+    ORCHESTRATOR_EVENT_QUEUE_CAPACITY: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_orchestrator_event_queue_capacity",
+            "orchestrator_event_queue_capacity",
+        ),
+    )
+    ORCHESTRATOR_MAX_ACTIVE_SESSIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_orchestrator_max_active_sessions",
+            "orchestrator_max_active_sessions",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

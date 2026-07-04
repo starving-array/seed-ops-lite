@@ -22,6 +22,14 @@ from app.agents.execution.models import (
     TaskFailed,
     TaskStarted,
 )
+from app.agents.execution.orchestrator import (
+    ExecutionCoordinator,
+    ExecutionEventDispatcher,
+    ExecutionOrchestrator,
+    ExecutionSessionManager,
+    ExecutionSummary,
+    TaskDispatcher,
+)
 from app.agents.execution.scheduler import (
     DependencyResolver,
     ExecutionScheduler,
@@ -66,4 +74,10 @@ __all__ = [
     "ScheduleResult",
     "ScheduleStatistics",
     "SchedulerValidationError",
+    "ExecutionOrchestrator",
+    "ExecutionCoordinator",
+    "TaskDispatcher",
+    "ExecutionSessionManager",
+    "ExecutionEventDispatcher",
+    "ExecutionSummary",
 ]
