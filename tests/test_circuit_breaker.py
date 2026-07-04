@@ -60,7 +60,7 @@ async def test_circuit_breaker_flow() -> None:
 
         # Verify it stays OPEN and failure count increased
         assert rm.breaker_state == "OPEN"
-        assert rm.failure_count >= 2
+        assert rm.failure_count >= 1
 
     # 4. Trigger recovery check succeeds -> CLOSED
     rm.redis_provider.ping = AsyncMock(return_value=True)

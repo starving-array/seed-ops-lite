@@ -91,3 +91,23 @@ __all__ += [
     "MessageRouter",
     "CommunicationBus",
 ]
+
+from app.agents.collaboration.memory import (
+    CoordinationManager,
+    CoordinationStatistics,
+    SharedLock,
+    SharedMemoryManager,
+    SharedSnapshot,
+    SharedWorkspace,
+    SynchronizationPolicy,
+)
+
+__all__ += [
+    "SynchronizationPolicy",
+    "SharedLock",
+    "SharedSnapshot",
+    "SharedWorkspace",
+    "CoordinationStatistics",
+    "SharedMemoryManager",
+    "CoordinationManager",
+]

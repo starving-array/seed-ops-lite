@@ -390,6 +390,27 @@ class PlatformSettings(BaseSettings):
             "multi_agent_message_ttl_seconds",
         ),
     )
+    MULTI_AGENT_WORKSPACE_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_workspace_timeout_seconds",
+            "multi_agent_workspace_timeout_seconds",
+        ),
+    )
+    MULTI_AGENT_SNAPSHOT_INTERVAL_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_snapshot_interval_seconds",
+            "multi_agent_snapshot_interval_seconds",
+        ),
+    )
+    MULTI_AGENT_MAX_SNAPSHOT_HISTORY: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_snapshot_history",
+            "multi_agent_max_snapshot_history",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
