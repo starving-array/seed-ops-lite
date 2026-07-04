@@ -275,6 +275,8 @@ class RuntimeManager(RuntimeProvider):
                 await asyncio.sleep(interval)
         finally:
             self.is_monitoring = False
+            if self.breaker_state == "HALF_OPEN":
+                self.breaker_state = "OPEN"
             logger.info(EventID.LOG_INFO, "Recovery monitor stopped.")
 
     def _queue_sync_event(self, event: tuple[str, str, Any]) -> None:

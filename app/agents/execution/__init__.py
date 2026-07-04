@@ -1,5 +1,13 @@
 """Agent Execution Domain Models & State Machine exports."""
 
+from app.agents.execution.integration import (
+    ExecutionIntegrationManager,
+    ExecutionIntegrationResult,
+    MemoryExecutionAdapter,
+    RuntimeExecutionAdapter,
+    ToolExecutionAdapter,
+    WorkflowExecutionAdapter,
+)
 from app.agents.execution.models import (
     CheckpointCreated,
     CheckpointRestored,
@@ -80,4 +88,10 @@ __all__ = [
     "ExecutionSessionManager",
     "ExecutionEventDispatcher",
     "ExecutionSummary",
+    "ExecutionIntegrationManager",
+    "WorkflowExecutionAdapter",
+    "MemoryExecutionAdapter",
+    "ToolExecutionAdapter",
+    "RuntimeExecutionAdapter",
+    "ExecutionIntegrationResult",
 ]

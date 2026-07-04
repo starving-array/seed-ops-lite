@@ -278,6 +278,27 @@ class PlatformSettings(BaseSettings):
             "orchestrator_max_active_sessions",
         ),
     )
+    INTEGRATION_SYNC_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_integration_sync_timeout_seconds",
+            "integration_sync_timeout_seconds",
+        ),
+    )
+    INTEGRATION_MAX_RETRIES: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_integration_max_retries",
+            "integration_max_retries",
+        ),
+    )
+    INTEGRATION_HEALTH_INTERVAL_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_integration_health_interval_seconds",
+            "integration_health_interval_seconds",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
