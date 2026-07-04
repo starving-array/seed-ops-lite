@@ -1,5 +1,12 @@
 """HITL domain models exports."""
 
+from app.platform.hitl.engine import (
+    ApprovalEngine,
+    ApprovalManager,
+    ApprovalPolicyEvaluator,
+    ApprovalStatisticsCollector,
+    ReviewerResolver,
+)
 from app.platform.hitl.models import (
     ApprovalAssignment,
     ApprovalContext,
@@ -36,4 +43,9 @@ __all__ = [
     "ApprovalStatistics",
     "ApprovalSession",
     "ApprovalEvent",
+    "ApprovalEngine",
+    "ApprovalManager",
+    "ReviewerResolver",
+    "ApprovalPolicyEvaluator",
+    "ApprovalStatisticsCollector",
 ]
