@@ -165,5 +165,28 @@ class PlatformSettings(BaseSettings):
         ),
     )
 
+    # Tool Framework Configurations
+    TOOLS_MAX_EXECUTION_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_tools_max_execution_timeout_seconds",
+            "tools_max_execution_timeout_seconds",
+        ),
+    )
+    TOOLS_MAX_CONCURRENT_EXECUTIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_tools_max_concurrent_executions",
+            "tools_max_concurrent_executions",
+        ),
+    )
+    TOOLS_MAX_RETRIES: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_tools_max_retries",
+            "tools_max_retries",
+        ),
+    )
+
 
 platform_settings = PlatformSettings()
