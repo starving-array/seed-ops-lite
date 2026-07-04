@@ -355,6 +355,41 @@ class PlatformSettings(BaseSettings):
             "multi_agent_max_shared_variables",
         ),
     )
+    MULTI_AGENT_MAX_QUEUE_SIZE: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_queue_size",
+            "multi_agent_max_queue_size",
+        ),
+    )
+    MULTI_AGENT_MAX_MESSAGE_SIZE: int = Field(
+        default=65536,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_message_size",
+            "multi_agent_max_message_size",
+        ),
+    )
+    MULTI_AGENT_DELIVERY_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_delivery_timeout_seconds",
+            "multi_agent_delivery_timeout_seconds",
+        ),
+    )
+    MULTI_AGENT_RETRY_ATTEMPTS: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_retry_attempts",
+            "multi_agent_retry_attempts",
+        ),
+    )
+    MULTI_AGENT_MESSAGE_TTL_SECONDS: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_message_ttl_seconds",
+            "multi_agent_message_ttl_seconds",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

@@ -1,5 +1,7 @@
 """Multi-Agent Collaboration Domain Models & Lifecycle exports."""
 
+# ruff: noqa: E402
+
 from app.agents.collaboration.models import (
     AgentAssigned,
     AgentAssignment,
@@ -66,4 +68,26 @@ __all__ += [
     "DelegationValidator",
     "AssignmentManager",
     "DelegationEngine",
+]
+
+from app.agents.collaboration.communication import (
+    CommunicationBus,
+    CommunicationStatistics,
+    DeliveryPolicy,
+    MessageDispatcher,
+    MessageEnvelope,
+    MessageResult,
+    MessageRouter,
+    MessageType,
+)
+
+__all__ += [
+    "MessageType",
+    "DeliveryPolicy",
+    "MessageEnvelope",
+    "MessageResult",
+    "CommunicationStatistics",
+    "MessageDispatcher",
+    "MessageRouter",
+    "CommunicationBus",
 ]
