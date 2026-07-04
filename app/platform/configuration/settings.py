@@ -558,6 +558,55 @@ class PlatformSettings(BaseSettings):
             "enterprise_audit_retention_days",
         ),
     )
+    PLATFORM_DDL_MAX_SQL_SIZE: int = Field(
+        default=1000000,
+        validation_alias=AliasChoices(
+            "platform_ddl_max_sql_size",
+            "ddl_max_sql_size",
+        ),
+    )
+    PLATFORM_DDL_MAX_TABLE_COUNT: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_ddl_max_table_count",
+            "ddl_max_table_count",
+        ),
+    )
+    PLATFORM_DDL_MAX_COLUMN_COUNT: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_ddl_max_column_count",
+            "ddl_max_column_count",
+        ),
+    )
+    PLATFORM_ER_MAX_TABLES: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_er_max_tables",
+            "er_max_tables",
+        ),
+    )
+    PLATFORM_ER_MAX_RELATIONSHIPS: int = Field(
+        default=250,
+        validation_alias=AliasChoices(
+            "platform_er_max_relationships",
+            "er_max_relationships",
+        ),
+    )
+    PLATFORM_ER_DEFAULT_ZOOM: float = Field(
+        default=1.0,
+        validation_alias=AliasChoices(
+            "platform_er_default_zoom",
+            "er_default_zoom",
+        ),
+    )
+    PLATFORM_ER_LAYOUT_ALGORITHM: str = Field(
+        default="hierarchical",
+        validation_alias=AliasChoices(
+            "platform_er_layout_algorithm",
+            "er_layout_algorithm",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

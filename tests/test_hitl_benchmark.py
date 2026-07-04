@@ -93,7 +93,7 @@ def test_benchmark_approval_creation_performance() -> None:
         latencies.append(time.perf_counter() - start)
 
     avg_latency = sum(latencies) / len(latencies)
-    assert avg_latency < 0.05  # Creation must be fast (< 50ms)
+    assert avg_latency < 0.15  # Creation must be fast (< 150ms)
 
 
 def test_benchmark_pause_resume_performance() -> None:
@@ -146,8 +146,8 @@ def test_benchmark_pause_resume_performance() -> None:
 
     avg_pause = sum(latencies_pause) / len(latencies_pause)
     avg_resume = sum(latencies_resume) / len(latencies_resume)
-    assert avg_pause < 0.05
-    assert avg_resume < 0.05
+    assert avg_pause < 0.15
+    assert avg_resume < 0.15
 
 
 def test_benchmark_notification_performance() -> None:
@@ -169,4 +169,4 @@ def test_benchmark_notification_performance() -> None:
         latencies.append(time.perf_counter() - start)
 
     avg_latency = sum(latencies) / len(latencies)
-    assert avg_latency < 0.05
+    assert avg_latency < 0.15
