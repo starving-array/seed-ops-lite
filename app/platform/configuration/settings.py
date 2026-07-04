@@ -663,6 +663,34 @@ class PlatformSettings(BaseSettings):
             "onboarding_hint_limit",
         ),
     )
+    PLATFORM_DEV_PORT: int = Field(
+        default=8000,
+        validation_alias=AliasChoices(
+            "platform_dev_port",
+            "dev_port",
+        ),
+    )
+    PLATFORM_DEV_STARTUP_TIMEOUT_SECONDS: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "platform_dev_startup_timeout_seconds",
+            "dev_startup_timeout_seconds",
+        ),
+    )
+    PLATFORM_DEV_HEALTH_CHECK_INTERVAL_SECONDS: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_dev_health_check_interval_seconds",
+            "dev_health_check_interval_seconds",
+        ),
+    )
+    PLATFORM_DEV_AUTO_SEED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "platform_dev_auto_seed",
+            "dev_auto_seed",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
