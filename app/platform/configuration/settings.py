@@ -439,6 +439,34 @@ class PlatformSettings(BaseSettings):
             "multi_agent_scheduling_timeout_seconds",
         ),
     )
+    HITL_MAX_REVIEWERS: int = Field(
+        default=16,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_reviewers",
+            "hitl_max_reviewers",
+        ),
+    )
+    HITL_MAX_COMMENTS: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_comments",
+            "hitl_max_comments",
+        ),
+    )
+    HITL_MAX_ATTACHMENT_METADATA_ENTRIES: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_attachment_metadata_entries",
+            "hitl_max_attachment_metadata_entries",
+        ),
+    )
+    HITL_DEFAULT_EXPIRATION_SECONDS: float = Field(
+        default=86400.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_default_expiration_seconds",
+            "hitl_default_expiration_seconds",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
