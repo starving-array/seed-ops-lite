@@ -467,6 +467,62 @@ class PlatformSettings(BaseSettings):
             "hitl_default_expiration_seconds",
         ),
     )
+    HITL_PAUSE_TIMEOUT_SECONDS: float = Field(
+        default=3600.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_pause_timeout_seconds",
+            "hitl_pause_timeout_seconds",
+        ),
+    )
+    HITL_RESUME_TIMEOUT_SECONDS: float = Field(
+        default=3600.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_resume_timeout_seconds",
+            "hitl_resume_timeout_seconds",
+        ),
+    )
+    HITL_MAX_INTERVENTION_HISTORY: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_intervention_history",
+            "hitl_max_intervention_history",
+        ),
+    )
+    HITL_CHECKPOINT_RESTART_TIMEOUT_SECONDS: float = Field(
+        default=600.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_checkpoint_restart_timeout_seconds",
+            "hitl_checkpoint_restart_timeout_seconds",
+        ),
+    )
+    HITL_REMINDER_INTERVAL_SECONDS: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_reminder_interval_seconds",
+            "hitl_reminder_interval_seconds",
+        ),
+    )
+    HITL_MAX_REMINDERS: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_reminders",
+            "hitl_max_reminders",
+        ),
+    )
+    HITL_ESCALATION_TIMEOUT_SECONDS: float = Field(
+        default=1800.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_escalation_timeout_seconds",
+            "hitl_escalation_timeout_seconds",
+        ),
+    )
+    HITL_NOTIFICATION_RETENTION_DAYS: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "platform_hitl_notification_retention_days",
+            "hitl_notification_retention_days",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()

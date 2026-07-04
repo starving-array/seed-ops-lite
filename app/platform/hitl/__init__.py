@@ -7,6 +7,18 @@ from app.platform.hitl.engine import (
     ApprovalStatisticsCollector,
     ReviewerResolver,
 )
+from app.platform.hitl.intervention import (
+    ExecutionController,
+    ExecutionStateTransition,
+    InterventionAction,
+    InterventionEngine,
+    InterventionHistoryEntry,
+    InterventionPolicy,
+    InterventionRequest,
+    InterventionStatistics,
+    PauseManager,
+    ResumeManager,
+)
 from app.platform.hitl.models import (
     ApprovalAssignment,
     ApprovalContext,
@@ -24,6 +36,20 @@ from app.platform.hitl.models import (
     Reviewer,
     ReviewerGroup,
     ReviewerType,
+)
+from app.platform.hitl.notifications import (
+    BaseNotificationProvider,
+    DeliveryState,
+    EscalationManager,
+    EscalationPolicy,
+    MockNotificationProvider,
+    NotificationLogEntry,
+    NotificationManager,
+    NotificationRequest,
+    NotificationStatistics,
+    NotificationType,
+    ReminderPolicy,
+    ReminderScheduler,
 )
 
 __all__ = [
@@ -48,4 +74,26 @@ __all__ = [
     "ReviewerResolver",
     "ApprovalPolicyEvaluator",
     "ApprovalStatisticsCollector",
+    "InterventionEngine",
+    "PauseManager",
+    "ResumeManager",
+    "ExecutionController",
+    "InterventionPolicy",
+    "InterventionAction",
+    "InterventionStatistics",
+    "InterventionRequest",
+    "InterventionHistoryEntry",
+    "ExecutionStateTransition",
+    "NotificationManager",
+    "ReminderScheduler",
+    "EscalationManager",
+    "NotificationType",
+    "EscalationPolicy",
+    "ReminderPolicy",
+    "DeliveryState",
+    "NotificationRequest",
+    "NotificationLogEntry",
+    "NotificationStatistics",
+    "BaseNotificationProvider",
+    "MockNotificationProvider",
 ]
