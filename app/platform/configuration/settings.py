@@ -208,6 +208,34 @@ class PlatformSettings(BaseSettings):
             "tools_max_document_size",
         ),
     )
+    PLANNING_MAX_DEPTH: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_planning_max_depth",
+            "planning_max_depth",
+        ),
+    )
+    PLANNING_MAX_TASKS: int = Field(
+        default=50,
+        validation_alias=AliasChoices(
+            "platform_planning_max_tasks",
+            "planning_max_tasks",
+        ),
+    )
+    PLANNING_MAX_DEPENDENCY_DEPTH: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "platform_planning_max_dependency_depth",
+            "planning_max_dependency_depth",
+        ),
+    )
+    PLANNING_MAX_BRANCHING_FACTOR: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_planning_max_branching_factor",
+            "planning_max_branching_factor",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
