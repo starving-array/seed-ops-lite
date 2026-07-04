@@ -187,6 +187,27 @@ class PlatformSettings(BaseSettings):
             "tools_max_retries",
         ),
     )
+    TOOLS_MAX_EXPORT_SIZE: int = Field(
+        default=1048576,
+        validation_alias=AliasChoices(
+            "platform_tools_max_export_size",
+            "tools_max_export_size",
+        ),
+    )
+    TOOLS_MAX_SEARCH_RESULTS: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_tools_max_search_results",
+            "tools_max_search_results",
+        ),
+    )
+    TOOLS_MAX_DOCUMENT_SIZE: int = Field(
+        default=1048576,
+        validation_alias=AliasChoices(
+            "platform_tools_max_document_size",
+            "tools_max_document_size",
+        ),
+    )
 
 
 platform_settings = PlatformSettings()
