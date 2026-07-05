@@ -35,9 +35,9 @@ All primary user workflows have been verified via manual walkthroughs:
 
 The following guides reflect current software states:
 *   `README.md`: Quickstart workflow scripts.
-*   `DEVELOPER_GUIDE.md` & `DEVELOPER_STARTUP.md`: Setup requirements.
-*   `CONFIGURATION_REFERENCE.md`: Port and runtime parameters.
-*   `POSTGRES_DDL_IMPORT.md`: Parser architecture and limitations.
+*   `docs/guides/DEVELOPER_GUIDE.md` & `docs/features/DEVELOPER_STARTUP.md`: Setup requirements.
+*   `docs/guides/CONFIGURATION_REFERENCE.md`: Port and runtime parameters.
+*   `docs/features/POSTGRES_DDL_IMPORT.md`: Parser architecture and limitations.
 
 ---
 

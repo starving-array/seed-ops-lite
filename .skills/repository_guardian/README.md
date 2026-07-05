@@ -127,7 +127,7 @@ If the Security Quality Gate fails:
 
 ### 4. Extension Guide (Plugging in new checks)
 To add a new security check or modify existing rules:
-1. **Open the Security Audit Script**: Edit [.skills/repository_guardian/scripts/security_audit.py](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/.skills/repository_guardian/scripts/security_audit.py).
+1. **Open the Security Audit Script**: Edit [.skills/repository_guardian/scripts/security_audit.py](/.skills/repository_guardian/scripts/security_audit.py).
 2. **Add a rule**:
    * For regex-based secret scans, append a dictionary definition to `SECRET_RULES`.
    * For code-based checks, append a dictionary definition to `DANGEROUS_CODE_RULES`.

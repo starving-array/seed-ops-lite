@@ -51,7 +51,7 @@ Every validation check corresponds to a strongly-typed rule defined in the centr
 
 ## 3. Rule Registry Strategy
 
-Rather than embedding hardcoded string identifiers inside the code, the validation engine imports and references `ValidationRule` from [rules.py](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/app/validation/rules.py).
+Rather than embedding hardcoded string identifiers inside the code, the validation engine imports and references `ValidationRule` from [rules.py](/app/validation/rules.py).
 
 * **Single Source of Truth**: All rule IDs are cataloged as enum members in `ValidationRule`.
 * **Consistency**: Prevents misaligned identifiers between the validator codebase, unit tests, and metrics collectors.
@@ -60,7 +60,7 @@ Rather than embedding hardcoded string identifiers inside the code, the validati
 
 ## 4. Centralized Version Strategy
 
-Application, validator, API, and schema hash version parameters are centralized in [version.py](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/app/core/version.py):
+Application, validator, API, and schema hash version parameters are centralized in [version.py](/app/core/version.py):
 
 * `APP_VERSION`: Overall version of the SeedOps Lite application.
 * `VALIDATOR_VERSION`: Semantic engine version for the Airlock Validation layer.
