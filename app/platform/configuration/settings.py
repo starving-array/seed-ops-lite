@@ -663,6 +663,13 @@ class PlatformSettings(BaseSettings):
             "onboarding_hint_limit",
         ),
     )
+    PLATFORM_DEV_HOST: str = Field(
+        default="127.0.0.1",
+        validation_alias=AliasChoices(
+            "platform_dev_host",
+            "dev_host",
+        ),
+    )
     PLATFORM_DEV_PORT: int = Field(
         default=8000,
         validation_alias=AliasChoices(
@@ -670,8 +677,15 @@ class PlatformSettings(BaseSettings):
             "dev_port",
         ),
     )
+    PLATFORM_DEV_FRONTEND_PORT: int = Field(
+        default=5173,
+        validation_alias=AliasChoices(
+            "platform_dev_frontend_port",
+            "dev_frontend_port",
+        ),
+    )
     PLATFORM_DEV_STARTUP_TIMEOUT_SECONDS: int = Field(
-        default=30,
+        default=60,
         validation_alias=AliasChoices(
             "platform_dev_startup_timeout_seconds",
             "dev_startup_timeout_seconds",
@@ -691,6 +705,26 @@ class PlatformSettings(BaseSettings):
             "dev_auto_seed",
         ),
     )
+
+    @property
+    def dev_host(self) -> str:
+        return self.PLATFORM_DEV_HOST
+
+    @property
+    def dev_backend_port(self) -> int:
+        return self.PLATFORM_DEV_PORT
+
+    @property
+    def dev_frontend_port(self) -> int:
+        return self.PLATFORM_DEV_FRONTEND_PORT
+
+    @property
+    def backend_health_url(self) -> str:
+        return f"http://{self.dev_host}:{self.dev_backend_port}/health"
+
+    @property
+    def frontend_health_url(self) -> str:
+        return f"http://{self.dev_host}:{self.dev_frontend_port}"
 
 
 platform_settings = PlatformSettings()
