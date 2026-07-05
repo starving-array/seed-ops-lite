@@ -1,19 +1,19 @@
-# Technical Debt Inventory
+# SafeSeedOps Lite — Technical Debt Inventory
 
-This document tracks technical debt itemizations identified during the v3.0.0 audits.
+This document tracks identified refactoring candidates and technical debt items for the SafeSeedOps Lite codebase.
 
----
-
-## 1. Identified Code Duplication & Complexity
-- **DB Operations in HITL**: Database queries in `intervention.py` and `notifications.py` open raw sqlite connections individually.
-  - *Recommendation*: Refactor to leverage a shared platform repository helper.
-
----
+## 1. Database Operations Code Duplication
+* **Issue:** Several endpoints open SQLite connection states independently.
+* **Refactoring:** Abstract connection pool contexts into a unified repository base pattern inside `app/services/`.
 
 ## 2. Dependency Audit & Upgrades
-- External dependencies are pinned in `pyproject.toml`. Pinned versions must be audited periodically for patch version updates.
+* **Issue:** Python dependencies pinned in `pyproject.toml` and npm packages in `package.json` require scheduling regular security audits and minor updates.
+* **Refactoring:** Configure automated audit tools (e.g. Dependabot, safety) to track packages.
 
----
+## 3. Database Indexes Optimization
+* **Issue:** Heavy relational schema datasets can encounter slow join checks without proper indices.
+* **Refactoring:** Create indices on foreign key reference IDs (e.g. `approval_id`, `project_id`) across state tables.
 
-## 3. Database Indexes
-- To optimize scale, add indexes on the `approval_id` column within `workflow_notifications` and `workflow_interventions`.
+## 4. State Management Refinement
+* **Issue:** Multi-step Schema designer triggers complex renders.
+* **Refactoring:** Transition state components to React Context providers or lightweight zustand stores to isolate state changes.
