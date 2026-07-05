@@ -165,5 +165,532 @@ class PlatformSettings(BaseSettings):
         ),
     )
 
+    # Tool Framework Configurations
+    TOOLS_MAX_EXECUTION_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_tools_max_execution_timeout_seconds",
+            "tools_max_execution_timeout_seconds",
+        ),
+    )
+    TOOLS_MAX_CONCURRENT_EXECUTIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_tools_max_concurrent_executions",
+            "tools_max_concurrent_executions",
+        ),
+    )
+    TOOLS_MAX_RETRIES: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_tools_max_retries",
+            "tools_max_retries",
+        ),
+    )
+    TOOLS_MAX_EXPORT_SIZE: int = Field(
+        default=1048576,
+        validation_alias=AliasChoices(
+            "platform_tools_max_export_size",
+            "tools_max_export_size",
+        ),
+    )
+    TOOLS_MAX_SEARCH_RESULTS: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_tools_max_search_results",
+            "tools_max_search_results",
+        ),
+    )
+    TOOLS_MAX_DOCUMENT_SIZE: int = Field(
+        default=1048576,
+        validation_alias=AliasChoices(
+            "platform_tools_max_document_size",
+            "tools_max_document_size",
+        ),
+    )
+    PLANNING_MAX_DEPTH: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_planning_max_depth",
+            "planning_max_depth",
+        ),
+    )
+    PLANNING_MAX_TASKS: int = Field(
+        default=50,
+        validation_alias=AliasChoices(
+            "platform_planning_max_tasks",
+            "planning_max_tasks",
+        ),
+    )
+    PLANNING_MAX_DEPENDENCY_DEPTH: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "platform_planning_max_dependency_depth",
+            "planning_max_dependency_depth",
+        ),
+    )
+    PLANNING_MAX_BRANCHING_FACTOR: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_planning_max_branching_factor",
+            "planning_max_branching_factor",
+        ),
+    )
+    SCHEDULER_MAX_DEPTH: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "platform_scheduler_max_depth",
+            "scheduler_max_depth",
+        ),
+    )
+    SCHEDULER_MAX_STAGES: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "platform_scheduler_max_stages",
+            "scheduler_max_stages",
+        ),
+    )
+    SCHEDULER_MAX_PARALLEL_TASKS: int = Field(
+        default=8,
+        validation_alias=AliasChoices(
+            "platform_scheduler_max_parallel_tasks",
+            "scheduler_max_parallel_tasks",
+        ),
+    )
+    ORCHESTRATOR_TIMEOUT_SECONDS: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "platform_orchestrator_timeout_seconds",
+            "orchestrator_timeout_seconds",
+        ),
+    )
+    ORCHESTRATOR_EVENT_QUEUE_CAPACITY: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_orchestrator_event_queue_capacity",
+            "orchestrator_event_queue_capacity",
+        ),
+    )
+    ORCHESTRATOR_MAX_ACTIVE_SESSIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_orchestrator_max_active_sessions",
+            "orchestrator_max_active_sessions",
+        ),
+    )
+    INTEGRATION_SYNC_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_integration_sync_timeout_seconds",
+            "integration_sync_timeout_seconds",
+        ),
+    )
+    INTEGRATION_MAX_RETRIES: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_integration_max_retries",
+            "integration_max_retries",
+        ),
+    )
+    INTEGRATION_HEALTH_INTERVAL_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_integration_health_interval_seconds",
+            "integration_health_interval_seconds",
+        ),
+    )
+    RECOVERY_MAX_ATTEMPTS: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_recovery_max_attempts",
+            "recovery_max_attempts",
+        ),
+    )
+    RECOVERY_CHECKPOINT_FREQUENCY: int = Field(
+        default=1,
+        validation_alias=AliasChoices(
+            "platform_recovery_checkpoint_frequency",
+            "recovery_checkpoint_frequency",
+        ),
+    )
+    RECOVERY_CANCELLATION_TIMEOUT_SECONDS: float = Field(
+        default=15.0,
+        validation_alias=AliasChoices(
+            "platform_recovery_cancellation_timeout_seconds",
+            "recovery_cancellation_timeout_seconds",
+        ),
+    )
+    RECOVERY_TIMEOUT_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_recovery_timeout_seconds",
+            "recovery_timeout_seconds",
+        ),
+    )
+    RECOVERY_RETRY_DELAY_SECONDS: float = Field(
+        default=2.0,
+        validation_alias=AliasChoices(
+            "platform_recovery_retry_delay_seconds",
+            "recovery_retry_delay_seconds",
+        ),
+    )
+    MULTI_AGENT_MAX_TEAM_SIZE: int = Field(
+        default=16,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_team_size",
+            "multi_agent_max_team_size",
+        ),
+    )
+    MULTI_AGENT_MAX_DELEGATION_DEPTH: int = Field(
+        default=4,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_delegation_depth",
+            "multi_agent_max_delegation_depth",
+        ),
+    )
+    MULTI_AGENT_MAX_SHARED_VARIABLES: int = Field(
+        default=128,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_shared_variables",
+            "multi_agent_max_shared_variables",
+        ),
+    )
+    MULTI_AGENT_MAX_QUEUE_SIZE: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_queue_size",
+            "multi_agent_max_queue_size",
+        ),
+    )
+    MULTI_AGENT_MAX_MESSAGE_SIZE: int = Field(
+        default=65536,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_message_size",
+            "multi_agent_max_message_size",
+        ),
+    )
+    MULTI_AGENT_DELIVERY_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_delivery_timeout_seconds",
+            "multi_agent_delivery_timeout_seconds",
+        ),
+    )
+    MULTI_AGENT_RETRY_ATTEMPTS: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_retry_attempts",
+            "multi_agent_retry_attempts",
+        ),
+    )
+    MULTI_AGENT_MESSAGE_TTL_SECONDS: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_message_ttl_seconds",
+            "multi_agent_message_ttl_seconds",
+        ),
+    )
+    MULTI_AGENT_WORKSPACE_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_workspace_timeout_seconds",
+            "multi_agent_workspace_timeout_seconds",
+        ),
+    )
+    MULTI_AGENT_SNAPSHOT_INTERVAL_SECONDS: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_snapshot_interval_seconds",
+            "multi_agent_snapshot_interval_seconds",
+        ),
+    )
+    MULTI_AGENT_MAX_SNAPSHOT_HISTORY: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_snapshot_history",
+            "multi_agent_max_snapshot_history",
+        ),
+    )
+    MULTI_AGENT_MAX_CONCURRENT_AGENTS: int = Field(
+        default=8,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_concurrent_agents",
+            "multi_agent_max_concurrent_agents",
+        ),
+    )
+    MULTI_AGENT_MAX_SCHEDULING_QUEUE_SIZE: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_max_scheduling_queue_size",
+            "multi_agent_max_scheduling_queue_size",
+        ),
+    )
+    MULTI_AGENT_CONFLICT_RETRY_LIMIT: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_conflict_retry_limit",
+            "multi_agent_conflict_retry_limit",
+        ),
+    )
+    MULTI_AGENT_SCHEDULING_TIMEOUT_SECONDS: float = Field(
+        default=30.0,
+        validation_alias=AliasChoices(
+            "platform_multi_agent_scheduling_timeout_seconds",
+            "multi_agent_scheduling_timeout_seconds",
+        ),
+    )
+    HITL_MAX_REVIEWERS: int = Field(
+        default=16,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_reviewers",
+            "hitl_max_reviewers",
+        ),
+    )
+    HITL_MAX_COMMENTS: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_comments",
+            "hitl_max_comments",
+        ),
+    )
+    HITL_MAX_ATTACHMENT_METADATA_ENTRIES: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_attachment_metadata_entries",
+            "hitl_max_attachment_metadata_entries",
+        ),
+    )
+    HITL_DEFAULT_EXPIRATION_SECONDS: float = Field(
+        default=86400.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_default_expiration_seconds",
+            "hitl_default_expiration_seconds",
+        ),
+    )
+    HITL_PAUSE_TIMEOUT_SECONDS: float = Field(
+        default=3600.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_pause_timeout_seconds",
+            "hitl_pause_timeout_seconds",
+        ),
+    )
+    HITL_RESUME_TIMEOUT_SECONDS: float = Field(
+        default=3600.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_resume_timeout_seconds",
+            "hitl_resume_timeout_seconds",
+        ),
+    )
+    HITL_MAX_INTERVENTION_HISTORY: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_intervention_history",
+            "hitl_max_intervention_history",
+        ),
+    )
+    HITL_CHECKPOINT_RESTART_TIMEOUT_SECONDS: float = Field(
+        default=600.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_checkpoint_restart_timeout_seconds",
+            "hitl_checkpoint_restart_timeout_seconds",
+        ),
+    )
+    HITL_REMINDER_INTERVAL_SECONDS: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_reminder_interval_seconds",
+            "hitl_reminder_interval_seconds",
+        ),
+    )
+    HITL_MAX_REMINDERS: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_hitl_max_reminders",
+            "hitl_max_reminders",
+        ),
+    )
+    HITL_ESCALATION_TIMEOUT_SECONDS: float = Field(
+        default=1800.0,
+        validation_alias=AliasChoices(
+            "platform_hitl_escalation_timeout_seconds",
+            "hitl_escalation_timeout_seconds",
+        ),
+    )
+    HITL_NOTIFICATION_RETENTION_DAYS: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "platform_hitl_notification_retention_days",
+            "hitl_notification_retention_days",
+        ),
+    )
+    ENTERPRISE_API_KEY_EXPIRATION_SECONDS: float = Field(
+        default=2592000.0,
+        validation_alias=AliasChoices(
+            "platform_enterprise_api_key_expiration_seconds",
+            "enterprise_api_key_expiration_seconds",
+        ),
+    )
+    ENTERPRISE_MAX_ORGANIZATIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_enterprise_max_organizations",
+            "enterprise_max_organizations",
+        ),
+    )
+    ENTERPRISE_MAX_PROJECTS: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_enterprise_max_projects",
+            "enterprise_max_projects",
+        ),
+    )
+    ENTERPRISE_MAX_MEMBERS: int = Field(
+        default=50,
+        validation_alias=AliasChoices(
+            "platform_enterprise_max_members",
+            "enterprise_max_members",
+        ),
+    )
+    ENTERPRISE_AUDIT_RETENTION_DAYS: int = Field(
+        default=90,
+        validation_alias=AliasChoices(
+            "platform_enterprise_audit_retention_days",
+            "enterprise_audit_retention_days",
+        ),
+    )
+    PLATFORM_DDL_MAX_SQL_SIZE: int = Field(
+        default=1000000,
+        validation_alias=AliasChoices(
+            "platform_ddl_max_sql_size",
+            "ddl_max_sql_size",
+        ),
+    )
+    PLATFORM_DDL_MAX_TABLE_COUNT: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_ddl_max_table_count",
+            "ddl_max_table_count",
+        ),
+    )
+    PLATFORM_DDL_MAX_COLUMN_COUNT: int = Field(
+        default=1000,
+        validation_alias=AliasChoices(
+            "platform_ddl_max_column_count",
+            "ddl_max_column_count",
+        ),
+    )
+    PLATFORM_ER_MAX_TABLES: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_er_max_tables",
+            "er_max_tables",
+        ),
+    )
+    PLATFORM_ER_MAX_RELATIONSHIPS: int = Field(
+        default=250,
+        validation_alias=AliasChoices(
+            "platform_er_max_relationships",
+            "er_max_relationships",
+        ),
+    )
+    PLATFORM_ER_DEFAULT_ZOOM: float = Field(
+        default=1.0,
+        validation_alias=AliasChoices(
+            "platform_er_default_zoom",
+            "er_default_zoom",
+        ),
+    )
+    PLATFORM_ER_LAYOUT_ALGORITHM: str = Field(
+        default="hierarchical",
+        validation_alias=AliasChoices(
+            "platform_er_layout_algorithm",
+            "er_layout_algorithm",
+        ),
+    )
+    PLATFORM_HELP_MAX_TOOLTIP_LENGTH: int = Field(
+        default=500,
+        validation_alias=AliasChoices(
+            "platform_help_max_tooltip_length",
+            "help_max_tooltip_length",
+        ),
+    )
+    PLATFORM_HELP_MAX_RECOMMENDATIONS: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "platform_help_max_recommendations",
+            "help_max_recommendations",
+        ),
+    )
+    PLATFORM_HELP_SEARCH_LIMIT: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "platform_help_search_limit",
+            "help_search_limit",
+        ),
+    )
+    PLATFORM_HELP_CACHE_SIZE: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_help_cache_size",
+            "help_cache_size",
+        ),
+    )
+    PLATFORM_ONBOARDING_MAX_STEPS: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "platform_onboarding_max_steps",
+            "onboarding_max_steps",
+        ),
+    )
+    PLATFORM_ONBOARDING_AUTO_LAUNCH: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "platform_onboarding_auto_launch",
+            "onboarding_auto_launch",
+        ),
+    )
+    PLATFORM_ONBOARDING_SAMPLE_SIZE: int = Field(
+        default=100,
+        validation_alias=AliasChoices(
+            "platform_onboarding_sample_size",
+            "onboarding_sample_size",
+        ),
+    )
+    PLATFORM_ONBOARDING_HINT_LIMIT: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_onboarding_hint_limit",
+            "onboarding_hint_limit",
+        ),
+    )
+    PLATFORM_DEV_PORT: int = Field(
+        default=8000,
+        validation_alias=AliasChoices(
+            "platform_dev_port",
+            "dev_port",
+        ),
+    )
+    PLATFORM_DEV_STARTUP_TIMEOUT_SECONDS: int = Field(
+        default=30,
+        validation_alias=AliasChoices(
+            "platform_dev_startup_timeout_seconds",
+            "dev_startup_timeout_seconds",
+        ),
+    )
+    PLATFORM_DEV_HEALTH_CHECK_INTERVAL_SECONDS: int = Field(
+        default=5,
+        validation_alias=AliasChoices(
+            "platform_dev_health_check_interval_seconds",
+            "dev_health_check_interval_seconds",
+        ),
+    )
+    PLATFORM_DEV_AUTO_SEED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "platform_dev_auto_seed",
+            "dev_auto_seed",
+        ),
+    )
+
 
 platform_settings = PlatformSettings()
