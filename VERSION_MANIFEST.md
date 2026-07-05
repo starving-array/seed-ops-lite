@@ -1,9 +1,9 @@
-# Version Manifest (Locked v3.0.0-rc1)
+# Version Manifest (Locked v1.0.0-rc1)
 
 This manifest records release and module version metadata.
 
-- **Platform Version**: `v3.0.0-rc1`
-- **Workflow Engine version**: `v3.0.0`
-- **HITL Platform module**: `v3.0.0`
-- **API Spec version**: `v3.0.0`
-- **SQLite Database Version**: `v3.0.0`
+- **Lite Version**: `v1.0.0-rc1`
+- **API Spec Version**: `v1.0.0`
+- **Schema Version**: `v1.0.0`
+- **Configuration Version**: `v1.0.0`
+- **Documentation Version**: `v1.0.0`

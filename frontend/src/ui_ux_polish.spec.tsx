@@ -1,12 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import React from 'react'
 import {
   Button,
   Card,
   Input,
   Textarea,
-  Select,
   Checkbox,
   Badge,
   Alert,
@@ -14,7 +12,6 @@ import {
   Divider,
   Container,
   PageHeader,
-  Section,
   Stack,
   Grid,
   EmptyState,
