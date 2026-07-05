@@ -8,7 +8,7 @@ This document records all anomalies, bugs, configuration issues, or dependencies
 
 ### **Issue ID**: `ISSUE-001`
 *   **Title**: `TypeError` in `structlog` ProcessorFormatter during server startup
-*   **Location**: [`app/core/logging/logging.py`](file:///c:/Users/lovea/Documents/hackathon/safeseedops-lite/app/core/logging/logging.py)
+*   **Location**: [`app/core/logging/logging.py`](/app/core/logging/logging.py)
 *   **Severity**: Critical (Blocker)
 *   **Priority**: High
 *   **Steps to Reproduce**:
@@ -29,7 +29,7 @@ This document records all anomalies, bugs, configuration issues, or dependencies
 
 ### **Issue ID**: `ISSUE-002`
 *   **Title**: AI Schema Assistant fails gracefully when `GEMINI_API_KEY` is missing
-*   **Location**: [`app/api/endpoints/schema.py`](file:///c:/Users/lovea/Documents/hackathon/safeseedops-lite/app/api/endpoints/schema.py)
+*   **Location**: [`app/api/endpoints/schema.py`](/app/api/endpoints/schema.py)
 *   **Severity**: Medium
 *   **Priority**: Medium
 *   **Steps to Reproduce**:

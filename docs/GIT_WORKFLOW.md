@@ -147,16 +147,16 @@ The project follows a phased release roadmap:
 ## Repository Standards
 
 The repository must always contain the following structured directories and files:
-* [README.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/README.md) – Setup and quickstart guide.
-* [LICENSE](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/LICENSE) – Apache License 2.0.
-* [.gitignore](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/.gitignore) – Excluded caches, environments, and secrets.
-* [.gitattributes](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/.gitattributes) – Line ending attributes configurations.
+* [README.md](/README.md) – Setup and quickstart guide.
+* [LICENSE](/LICENSE) – Apache License 2.0.
+* [.gitignore](/.gitignore) – Excluded caches, environments, and secrets.
+* [.gitattributes](/.gitattributes) – Line ending attributes configurations.
 * `docs/` – Design specs and platform architecture guides.
 * `tests/` – Python test suite.
 * `.skills/` – Custom agent skills (including the Seed Skill).
 * `pyproject.toml` – Dependency definitions and tool configurations.
-* [docs/architecture/ai_platform_architecture.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/docs/architecture/ai_platform_architecture.md) – Architecture documentation.
-* [docs/GIT_WORKFLOW.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/docs/GIT_WORKFLOW.md) – Workflow documentation.
+* [docs/architecture/ai_platform_architecture.md](/docs/architecture/ai_platform_architecture.md) – Architecture documentation.
+* [docs/GIT_WORKFLOW.md](/docs/GIT_WORKFLOW.md) – Workflow documentation.
 
 ---
 

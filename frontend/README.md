@@ -112,7 +112,7 @@ The **Job History Workspace** (under `/job-history`) manages and audits long-run
 
 ## Design System & Reusable Components
 
-All reusable UI primitives and styling tokens are established in [frontend/src/components/ui.tsx](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/frontend/src/components/ui.tsx).
+All reusable UI primitives and styling tokens are established in [frontend/src/components/ui.tsx](/frontend/src/components/ui.tsx).
 
 ---
 

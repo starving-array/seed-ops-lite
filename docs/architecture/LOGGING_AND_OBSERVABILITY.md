@@ -4,7 +4,7 @@ This document describes the structured logging UX, telemetry instrumentation, an
 
 ## 1. Architecture Overview
 
-SafeSeed-Ops Lite uses a structured logging architecture centered around the [core logger](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/app/core/logging/logging.py) that propagates events containing structured diagnostic fields (Component, Correlation ID, Request ID, Environment) and outputs them to standard consoles using a custom parser.
+SafeSeed-Ops Lite uses a structured logging architecture centered around the [core logger](/app/core/logging/logging.py) that propagates events containing structured diagnostic fields (Component, Correlation ID, Request ID, Environment) and outputs them to standard consoles using a custom parser.
 
 ```mermaid
 graph TD
@@ -19,7 +19,7 @@ graph TD
 
 ## 2. Console Box Formats
 
-The [`PrettyConsoleFormatter`](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/app/core/logging/formatters.py) formats key developer experience events into beautiful, boxed Unicode outputs.
+The [`PrettyConsoleFormatter`](/app/core/logging/formatters.py) formats key developer experience events into beautiful, boxed Unicode outputs.
 
 ### LLM Call Log Block
 When an AI contract execution begins or completes, the system emits an HSL-tailored boxed segment indicating LLM request details, prompts, and tokens metrics:

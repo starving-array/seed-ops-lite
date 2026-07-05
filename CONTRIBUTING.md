@@ -60,7 +60,7 @@ Every contribution must pass the quality gates before being accepted:
 
 ## 5. Documentation Expectations
 
-* Update relevant markdown guides (such as [README.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/README.md) or [docs/architecture/ai_platform_architecture.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/docs/architecture/ai_platform_architecture.md)) if your change introduces new CLI options, system configs, or data schemas.
+* Update relevant markdown guides (such as [README.md](/README.md) or [docs/architecture/ai_platform_architecture.md](/docs/architecture/ai_platform_architecture.md)) if your change introduces new CLI options, system configs, or data schemas.
 * Preserve all inline Python comments and docstrings.
 
 ---

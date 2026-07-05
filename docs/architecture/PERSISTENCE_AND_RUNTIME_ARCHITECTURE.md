@@ -143,8 +143,8 @@ SafeSeedOps Lite establishes four core platform domains:
 3.  **Artifacts Domain**: Manages generated Parquet files, metadata, export bundles, zip packages, and retention policies.
 4.  **Operations Domain**: Drives Caretaker agent monitoring, security checks, diagnostics, and the Issue Event tracking framework.
 
-For detailed guidelines on decoupling and Swappable Providers, see [PLATFORM_PRINCIPLES.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/docs/architecture/PLATFORM_PRINCIPLES.md).
-For the complete SQLite schema design specification, see [SQLITE_SCHEMA.md](file:///C:/Users/lovea/Documents/hackathon/safeseedops-lite/docs/database/SQLITE_SCHEMA.md).
+For detailed guidelines on decoupling and Swappable Providers, see [PLATFORM_PRINCIPLES.md](/docs/architecture/PLATFORM_PRINCIPLES.md).
+For the complete SQLite schema design specification, see [SQLITE_SCHEMA.md](/docs/database/SQLITE_SCHEMA.md).
 
 ---
 
