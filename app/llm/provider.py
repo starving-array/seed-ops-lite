@@ -307,6 +307,9 @@ class GeminiProvider(LLMProvider):
             estimated_cost = self.estimateCost(
                 model, prompt_tokens or 0, completion_tokens or 0
             )
+        else:
+            logger.warning("Usage metadata unavailable")
+            estimated_cost = None
 
         candidates = response_json.get("candidates", [])
         first_candidate = candidates[0] if candidates else {}

@@ -7,6 +7,7 @@ import inspect
 import time
 import typing
 import uuid
+from datetime import UTC
 from typing import Any
 
 from app.core.context.context import get_context
@@ -152,6 +153,10 @@ class LLMGateway:
                 elif current_prov_name in ("google", "gemini", "vertex"):
                     provider_request.model = "gemini-2.5-flash"
 
+            from datetime import datetime
+
+            start_time_dt = datetime.now(UTC)
+            start_time_iso = start_time_dt.isoformat()
             start_time = time.perf_counter()
             attempt_tracker = {"count": 0}
 
@@ -215,6 +220,8 @@ class LLMGateway:
                 response = await execute_with_retry(
                     call_provider, max_retries=retry_count
                 )
+                end_time_dt = datetime.now(UTC)
+                end_time_iso = end_time_dt.isoformat()
                 latency_ms = (time.perf_counter() - start_time) * 1000.0
 
                 response.usage.latency_ms = round(latency_ms, 2)
@@ -235,19 +242,35 @@ class LLMGateway:
                     estimated_cost = 0.0
                 response.usage.estimated_cost = estimated_cost
 
+                # If provider returns no usage metadata: log warning
+                if response.usage.prompt_tokens is None:
+                    logger.warning(EventID.LOG_WARNING, "Usage metadata unavailable")
+
                 # Store telemetry record
                 telemetry_record = {
+                    "request_id": request_id,
+                    "correlation_id": correlation_id,
                     "provider": current_prov_name,
                     "model": response.usage.model,
-                    "skill": template_name or "N/A",
+                    "skill_name": template_name or "N/A",
+                    "template_name": template_name,
+                    "template_version": template_version,
+                    "start_time": start_time_iso,
+                    "end_time": end_time_iso,
+                    "latency_ms": response.usage.latency_ms,
+                    "retry_count": attempt_tracker["count"] - 1,
+                    "finish_reason": response.finish_reason,
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
                     "status": "SUCCESS",
+                    "error_message": None,
+                    # Backwards compatibility fields:
+                    "skill": template_name or "N/A",
                     "response_type": response_type,
                     "attempt_number": attempt_tracker["count"],
                     "max_attempts": retry_count + 1,
-                    "retry_count": attempt_tracker["count"] - 1,
                     "failover_count": failover_count,
-                    "latency_ms": response.usage.latency_ms,
-                    "finish_reason": response.finish_reason,
                     "usage": {
                         "prompt_tokens": response.usage.prompt_tokens,
                         "completion_tokens": response.usage.completion_tokens,
@@ -269,26 +292,19 @@ class LLMGateway:
                         return "MockProvider"
                     return str(v)
 
-                cost_str = "0.000000"
-                if isinstance(estimated_cost, int | float):
-                    cost_str = f"{estimated_cost:.6f}"
-                elif estimated_cost is not None and not inspect.iscoroutine(
-                    estimated_cost
-                ):
-                    cost_str = str(estimated_cost)
-
                 log_block = (
                     f"\n==================================================\n"
-                    f"LLM REQUEST\n"
+                    f"LLM REQUEST TELEMETRY\n"
                     f"==================================================\n"
                     f"Provider: {val(active_provider.name())}\n"
                     f"Model: {val(response.usage.model)}\n"
-                    f"Authentication: {val(active_provider.auth_status())}\n"
+                    f"Skill: {val(template_name or 'N/A')}\n"
+                    f"Latency: {val(response.usage.latency_ms)} ms\n"
+                    f"Retry Count: {attempt_tracker['count'] - 1}\n"
                     f"Prompt Tokens: {val(response.usage.prompt_tokens)}\n"
                     f"Completion Tokens: {val(response.usage.completion_tokens)}\n"
                     f"Total Tokens: {val(response.usage.total_tokens)}\n"
-                    f"Latency: {val(response.usage.latency_ms)} ms\n"
-                    f"Cost: ${cost_str}\n"
+                    f"Finish Reason: {val(response.finish_reason)}\n"
                     f"Status: SUCCESS\n"
                     f"=================================================="
                 )
@@ -296,6 +312,79 @@ class LLMGateway:
                 return response
 
             except Exception as exc:
+                end_time_dt = datetime.now(UTC)
+                end_time_iso = end_time_dt.isoformat()
+                latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+                prompt_tk = getattr(exc, "prompt_tokens", None)
+                completion_tk = getattr(exc, "completion_tokens", None)
+                total_tk = getattr(exc, "total_tokens", None)
+
+                if prompt_tk is None:
+                    logger.warning(EventID.LOG_WARNING, "Usage metadata unavailable")
+
+                telemetry_record = {
+                    "request_id": request_id,
+                    "correlation_id": correlation_id,
+                    "provider": current_prov_name,
+                    "model": provider_request.model or model,
+                    "skill_name": template_name or "N/A",
+                    "template_name": template_name,
+                    "template_version": template_version,
+                    "start_time": start_time_iso,
+                    "end_time": end_time_iso,
+                    "latency_ms": round(latency_ms, 2),
+                    "retry_count": attempt_tracker["count"] - 1,
+                    "finish_reason": getattr(exc, "finish_reason", None),
+                    "prompt_tokens": prompt_tk,
+                    "completion_tokens": completion_tk,
+                    "total_tokens": total_tk,
+                    "status": "FAILED",
+                    "error_message": str(exc),
+                    # Backwards compatibility fields:
+                    "skill": template_name or "N/A",
+                    "response_type": "unknown",
+                    "attempt_number": attempt_tracker["count"],
+                    "max_attempts": retry_count + 1,
+                    "failover_count": failover_count,
+                    "usage": {
+                        "prompt_tokens": prompt_tk,
+                        "completion_tokens": completion_tk,
+                        "total_tokens": total_tk,
+                    },
+                    "estimated_cost": 0.0,
+                    "authentication_method": (
+                        "MockAuth"
+                        if inspect.iscoroutine(active_provider.auth_status())
+                        else active_provider.auth_status()
+                    ),
+                }
+                ctx.llm_telemetry.append(telemetry_record)
+
+                def val_fail(v: Any) -> str:
+                    if v is None:
+                        return "Unavailable"
+                    return str(v)
+
+                log_block_fail = (
+                    f"\n==================================================\n"
+                    f"LLM REQUEST FAILURE\n"
+                    f"==================================================\n"
+                    f"Provider: {current_prov_name}\n"
+                    f"Model: {provider_request.model or model}\n"
+                    f"Skill: {template_name or 'N/A'}\n"
+                    f"Latency: {round(latency_ms, 2)} ms\n"
+                    f"Retry Count: {attempt_tracker['count'] - 1}\n"
+                    f"Prompt Tokens: {val_fail(prompt_tk)}\n"
+                    f"Completion Tokens: {val_fail(completion_tk)}\n"
+                    f"Total Tokens: {val_fail(total_tk)}\n"
+                    f"Finish Reason: {val_fail(getattr(exc, 'finish_reason', None))}\n"
+                    f"Status: FAILED\n"
+                    f"Error: {exc!s}\n"
+                    f"=================================================="
+                )
+                logger.error(EventID.LLM_ERROR, log_block_fail, component="LLMGateway")
+
                 last_exception = exc
                 attempt_number += attempt_tracker["count"]
 
