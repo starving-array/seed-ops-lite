@@ -9,14 +9,17 @@ import {
   Spinner,
   Input,
   Checkbox,
+  Badge,
 } from '../../components/ui'
 import { useSchema } from '../../context/SchemaContext'
+import { useProjects } from '../../context/ProjectContext'
 import { schemaService } from '../../services/schema'
 import type { GenerationResponse } from '../../services/schema'
 import { useNotifications } from '../../context/NotificationContext'
 
 export const DataGeneration = () => {
   const { tables, relationships, isLoading: isSchemaLoading, saveStatus } = useSchema()
+  const { projects, activeProjectId, selectProject } = useProjects()
   const { addNotification } = useNotifications()
   const navigate = useNavigate()
 
@@ -346,10 +349,36 @@ export const DataGeneration = () => {
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6 text-left animate-fade-in font-sans">
-      <PageHeader
-        title="Mock Data Generator"
-        subtitle="Produce realistic, relational datasets automatically populated using topological order."
-      />
+      <div className="flex justify-between items-start flex-wrap gap-4">
+        <PageHeader
+          title="Mock Data Generator"
+          subtitle="Produce realistic, relational datasets automatically populated using topological order."
+        />
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Project Selector */}
+          <div className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider pl-1">Project:</span>
+            <select
+              value={activeProjectId}
+              onChange={(e) => selectProject(e.target.value)}
+              className="bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer font-medium"
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Active Schema info */}
+          <div className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider pl-1">Active Schema:</span>
+            <Badge variant="success" className="normal-case text-[10px] py-1 px-2 font-bold font-mono">
+              {tables.length} tables | {relationships.length} relationships
+            </Badge>
+          </div>
+        </div>
+      </div>
 
       {/* ==================== 1. PREVIEW PREVIEW MODAL ==================== */}
       {showPreviewModal && (

@@ -60,7 +60,19 @@ export class ApiClient {
     } = options
 
     const url = `${this.baseUrl}${path.startsWith('/') ? path : '/' + path}`
-    const mergedHeaders = { ...this.defaultHeaders, ...headers }
+    const activeProject =
+      (typeof localStorage !== 'undefined'
+        ? localStorage.getItem('active_project_id')
+        : null) || 'default'
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    const mergedHeaders: Record<string, string> = {
+      ...this.defaultHeaders,
+      'X-Project-Id': activeProject,
+      ...(headers as Record<string, string>),
+    }
+    if (isFormData) {
+      delete mergedHeaders['Content-Type']
+    }
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
@@ -83,7 +95,7 @@ export class ApiClient {
     }
 
     if (body) {
-      init.body = typeof body === 'object' ? JSON.stringify(body) : body
+      init.body = isFormData ? body : (typeof body === 'object' ? JSON.stringify(body) : body)
     }
 
     logger.debug(`API Request: [${method}] -> ${url}`, {

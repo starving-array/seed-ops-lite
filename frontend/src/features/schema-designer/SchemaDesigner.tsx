@@ -12,6 +12,7 @@ import { useSchema } from '../../context/SchemaContext'
 import type { Table, Column, Relationship } from '../../context/SchemaContext'
 import { schemaService } from '../../services/schema'
 import type { AISuggestion } from '../../services/schema'
+import { useProjects } from '../../context/ProjectContext'
 
 export const SchemaGenerator = () => {
   const {
@@ -25,8 +26,78 @@ export const SchemaGenerator = () => {
     triggerSave,
   } = useSchema()
 
+  const { projects, activeProjectId, selectProject } = useProjects()
+
   const [selectedTableId, setSelectedTableId] = useState<string>('1')
   const [tableSearch, setTableSearch] = useState<string>('')
+
+  // Import Schema states
+  const [isImportOpen, setIsImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importFileType, setImportFileType] = useState('sql')
+  const [isDragging, setIsDragging] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+
+  const handleImportSchema = async () => {
+    setIsImporting(true)
+    setImportError('')
+    try {
+      const response = await schemaService.importSchema({
+        content: importFile ? undefined : importText,
+        fileType: importFileType,
+        file: importFile || undefined,
+      })
+
+      if (response.success && response.data) {
+        setTables(response.data.tables)
+        setRelationships(response.data.relationships)
+        setIsImportOpen(false)
+        setImportText('')
+        setImportFile(null)
+      } else {
+        setImportError(response.error?.message || 'Failed to import schema.')
+      }
+    } catch (err: any) {
+      setImportError(err.message || 'An error occurred during schema import.')
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => {
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0]
+      setImportFile(file)
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      if (['sql', 'ddl', 'csv', 'xlsx', 'json', 'txt'].includes(ext)) {
+        setImportFileType(ext)
+      }
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0]
+      setImportFile(file)
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      if (['sql', 'ddl', 'csv', 'xlsx', 'json', 'txt'].includes(ext)) {
+        setImportFileType(ext)
+      }
+    }
+  }
 
   // AI Schema Assistant state
   const [aiStatus, setAiStatus] = useState<'waiting' | 'analyzing' | 'completed' | 'failed'>('waiting')
@@ -464,31 +535,57 @@ export const SchemaGenerator = () => {
           title="Schema Designer"
           subtitle="Interactively build entity relationship tables and columns for database generation."
         />
-        <div className="flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-          {saveStatus === 'saving' ? (
-            <span className="text-xs text-indigo-400 flex items-center gap-1.5 font-medium px-2">
-              <Spinner size="sm" /> Saving...
-            </span>
-          ) : saveStatus === 'failed' ? (
-            <span className="text-xs text-red-400 flex items-center gap-1.5 font-medium px-2">
-              <span>⚠️</span> Save failed
-            </span>
-          ) : (
-            <span className="text-xs text-emerald-400 flex items-center gap-1.5 font-medium px-2 font-mono">
-              <span>✓</span> All changes saved
-            </span>
-          )}
-          {saveStatus === 'failed' && (
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Project Selector */}
+          <div className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider pl-1">Project:</span>
+            <select
+              value={activeProjectId}
+              onChange={(e) => selectProject(e.target.value)}
+              className="bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer font-medium"
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+            {saveStatus === 'saving' ? (
+              <span className="text-xs text-indigo-400 flex items-center gap-1.5 font-medium px-2">
+                <Spinner size="sm" /> Saving...
+              </span>
+            ) : saveStatus === 'failed' ? (
+              <span className="text-xs text-red-400 flex items-center gap-1.5 font-medium px-2">
+                <span>⚠️</span> Save failed
+              </span>
+            ) : (
+              <span className="text-xs text-emerald-400 flex items-center gap-1.5 font-medium px-2 font-mono">
+                <span>✓</span> All changes saved
+              </span>
+            )}
+            {saveStatus === 'failed' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={triggerSave}
+                disabled={isSaving}
+                className="text-xs border-red-500/30 hover:bg-red-500/10 text-red-400"
+              >
+                Retry Save
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
-              onClick={triggerSave}
-              disabled={isSaving}
-              className="text-xs border-red-500/30 hover:bg-red-500/10 text-red-400"
+              onClick={() => setIsImportOpen(true)}
+              className="text-xs text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10"
             >
-              Retry Save
+              📥 Import Schema
             </Button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -1276,6 +1373,152 @@ export const SchemaGenerator = () => {
           </Card>
         </div>
       </div>
+
+      {/* ==================== IMPORT SCHEMA MODAL ==================== */}
+      {isImportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm text-left">
+          <Card className="w-full max-w-2xl bg-slate-900 border-slate-800 flex flex-col max-h-[95vh] overflow-hidden animate-fade-in">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-800">
+              <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
+                <span>📥</span> Import Database Schema
+              </h3>
+              <button
+                onClick={() => setIsImportOpen(false)}
+                className="text-slate-400 hover:text-slate-200 text-lg focus:outline-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1 text-xs text-slate-350">
+              {importError && (
+                <Alert variant="error" title="Import Failed">
+                  {importError}
+                </Alert>
+              )}
+
+              {/* Drag and Drop Area */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Drag & Drop File Upload
+                </label>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
+                    isDragging
+                      ? 'border-indigo-500 bg-indigo-500/5'
+                      : importFile
+                        ? 'border-emerald-500/50 bg-emerald-500/5'
+                        : 'border-slate-800 hover:border-slate-700 bg-slate-950/40'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="schema-file-upload"
+                    accept=".sql,.ddl,.csv,.xlsx,.json,.txt"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <label htmlFor="schema-file-upload" className="cursor-pointer space-y-2 block">
+                    <span className="text-3xl block">
+                      {importFile ? '📄' : '📁'}
+                    </span>
+                    <span className="block font-medium text-slate-300">
+                      {importFile ? (
+                        <span className="text-emerald-400 font-bold">{importFile.name}</span>
+                      ) : (
+                        'Drag your schema file here or click to browse'
+                      )}
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
+                      Supports *.sql, *.ddl, *.csv, *.xlsx, *.json, *.txt
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* File Type Selector */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    Format / File Type
+                  </label>
+                  <select
+                    value={importFileType}
+                    onChange={(e) => setImportFileType(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-lg p-2 text-slate-200 focus:outline-none"
+                  >
+                    <option value="sql">SQL / DDL Query</option>
+                    <option value="json">JSON Document</option>
+                    <option value="csv">CSV (Comma-Separated)</option>
+                    <option value="xlsx">Excel Workbook</option>
+                    <option value="txt">Text File (Plain)</option>
+                  </select>
+                </div>
+                {importFile && (
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setImportFile(null)}
+                      className="w-full text-slate-400 border-slate-850 hover:bg-slate-800"
+                    >
+                      Clear Uploaded File
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* SQL Text Area (Paste SQL) */}
+              {!importFile && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Or Paste SQL / DDL / JSON Raw Code
+                  </label>
+                  <textarea
+                    rows={8}
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    placeholder="CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(100));"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl p-3 font-mono text-[11px] text-slate-350 placeholder:text-slate-650 focus:outline-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-3 p-5 border-t border-slate-800 bg-slate-900/60">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsImportOpen(false)}
+                disabled={isImporting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleImportSchema}
+                disabled={isImporting || (!importFile && !importText.trim())}
+                className="gap-2"
+              >
+                {isImporting ? (
+                  <>
+                    <Spinner size="sm" /> Importing...
+                  </>
+                ) : (
+                  'Import Schema'
+                )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

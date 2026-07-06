@@ -40,7 +40,7 @@ const mockHealthData: HealthReport = {
   debug_mode: true,
   llm_status: {
     provider: 'Gemini',
-    model: 'gemini-1.5-pro',
+    model: 'gemini-2.5-flash',
     gateway_status: 'ready',
     retry_count: 3,
     timeout: 30,
@@ -138,7 +138,7 @@ describe('StatusDiagnosticsCard Component Tests', () => {
     expect(html).toContain('Provider')
     expect(html).toContain('Gemini')
     expect(html).toContain('Model')
-    expect(html).toContain('gemini-1.5-pro')
+    expect(html).toContain('gemini-2.5-flash')
     expect(html).toContain('Retry Count')
     expect(html).toContain('Timeout')
     expect(html).toContain('API Key Configured')

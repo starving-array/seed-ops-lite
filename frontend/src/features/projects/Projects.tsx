@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Button,
   Card,
@@ -7,46 +7,24 @@ import {
   PageHeader,
   EmptyState,
 } from '../../components/ui'
+import { useProjects } from '../../context/ProjectContext'
 
 export const Projects = () => {
-  const [projects, setProjects] = useState([
-    {
-      id: '1',
-      name: 'SafeSeed Core DB',
-      description:
-        'Core schema configuration storing transaction records and customer profiles.',
-      tables: 8,
-      status: 'verified',
-      updatedAt: '2026-06-27',
-    },
-    {
-      id: '2',
-      name: 'Analytics Warehouse',
-      description:
-        'OLAP schema targeting customer telemetry, clicks, and page view actions.',
-      tables: 12,
-      status: 'pending',
-      updatedAt: '2026-06-25',
-    },
-  ])
+  const { projects, activeProjectId, selectProject, createProject, fetchProjects } = useProjects()
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
 
-  const handleCreateProject = () => {
+  useEffect(() => {
+    fetchProjects()
+  }, [])
+
+  const handleCreateProject = async () => {
     const name = prompt('Enter Project Name:')
     if (!name) return
     const description =
       prompt('Enter Project Description:') || 'No description provided.'
-    const newProj = {
-      id: Math.random().toString(36).substring(2, 9),
-      name,
-      description,
-      tables: 0,
-      status: 'pending',
-      updatedAt: new Date().toISOString().split('T')[0],
-    }
-    setProjects((prev) => [newProj, ...prev])
+    await createProject(name, description)
   }
 
   const filteredProjects = projects.filter((p) => {
@@ -132,7 +110,12 @@ export const Projects = () => {
             <Card
               key={p.id}
               hoverable
-              className="p-6 flex flex-col justify-between h-48 border border-slate-800/80 hover:border-slate-700/60 bg-slate-900/30"
+              onClick={() => selectProject(p.id)}
+              className={`p-6 flex flex-col justify-between h-48 border transition-all cursor-pointer ${
+                p.id === activeProjectId
+                  ? 'border-indigo-500 bg-indigo-950/20 shadow-lg shadow-indigo-500/10'
+                  : 'border-slate-800/80 hover:border-slate-700/60 bg-slate-900/30'
+              }`}
             >
               <div className="space-y-2">
                 <div className="flex justify-between items-start">
@@ -151,7 +134,7 @@ export const Projects = () => {
               </div>
               <div className="flex justify-between items-center pt-4 border-t border-slate-800/60 text-[10px] text-slate-500">
                 <span>📊 {p.tables} tables</span>
-                <span>Last updated: {p.updatedAt}</span>
+                <span>Last updated: {p.updated_at ? p.updated_at.split('T')[0] : 'N/A'}</span>
               </div>
             </Card>
           ))}
