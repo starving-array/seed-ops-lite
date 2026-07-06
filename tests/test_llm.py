@@ -88,12 +88,9 @@ async def test_gemini_provider_token_fallback() -> None:
         provider = GeminiProvider()
         response = await provider.generate(request)
 
-        assert response.usage.prompt_tokens > 0
-        assert response.usage.completion_tokens > 0
-        assert (
-            response.usage.total_tokens
-            == response.usage.prompt_tokens + response.usage.completion_tokens
-        )
+        assert response.usage.prompt_tokens is None
+        assert response.usage.completion_tokens is None
+        assert response.usage.total_tokens is None
 
 
 @pytest.mark.asyncio

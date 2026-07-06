@@ -1,11 +1,14 @@
 """Orchestration gateway coordinating provider execution, validation, cost estimation, and telemetry."""
 
 import time
+import typing
 import uuid
+from typing import Any
 
 from app.core.context.context import get_context
 from app.core.logging.logging import logger
 from app.llm.config_resolver import resolve_llm_config, validate_llm_config
+from app.llm.exceptions import LLMValidationError
 from app.llm.models import LLMRequest, LLMResponse
 from app.llm.provider import GeminiProvider, LLMProvider
 from app.llm.retry import execute_with_retry
@@ -29,6 +32,7 @@ class LLMGateway:
         self,
         request: RenderedPrompt | LLMRequest,
         json_mode: bool | None = None,
+        validator_callback: "typing.Callable[[LLMResponse], None] | None" = None,
     ) -> LLMResponse:
         """Generate content from the configured language model.
 
@@ -112,6 +116,8 @@ class LLMGateway:
 
         start_time = time.perf_counter()
 
+        attempt_tracker = {"count": 0}
+
         # Log LLM Request
         logger.info(
             EventID.LLM_REQUEST,
@@ -129,11 +135,66 @@ class LLMGateway:
         try:
             # Wrapped provider invocation to run within the retry handler
             async def call_provider() -> LLMResponse:
-                return await self._provider.generate(
+                attempt_tracker["count"] += 1
+                resp = await self._provider.generate(
                     provider_request,
                     correlation_id=correlation_id,
                     timeout=timeout,
                 )
+                # Check JSON validity inside retry loop so errors are caught and retried
+                try:
+                    validate_response_text(resp.text, resolved_json_mode)
+                    if validator_callback:
+                        validator_callback(resp)
+                except Exception as eval_exc:
+                    is_last_attempt = attempt_tracker["count"] > retry_count
+                    if is_last_attempt and resolved_json_mode:
+                        try:
+                            from app.llm.validation import repair_json
+
+                            repaired_text = repair_json(resp.text)
+                            resp.text = repaired_text
+                            # re-validate after repair
+                            validate_response_text(resp.text, resolved_json_mode)
+                            if validator_callback:
+                                validator_callback(resp)
+                            return resp
+                        except Exception as repair_exc:
+                            # If repair also fails, raise LLMValidationError propagating details
+                            repair_details = getattr(repair_exc, "details", None) or {
+                                "error": str(repair_exc)
+                            }
+                            raise LLMValidationError(
+                                message=f"Contract structural validation failed after JSON repair: {repair_exc}",
+                                details=repair_details,
+                            ) from repair_exc
+
+                    candidates = (
+                        resp.raw_response.get("candidates", [])
+                        if resp.raw_response
+                        else []
+                    )
+                    finish_reason = (
+                        candidates[0].get("finishReason") if candidates else "UNKNOWN"
+                    )
+                    logger.warning(
+                        EventID.LOG_WARNING,
+                        f"LLM validation failed (finish_reason={finish_reason}). "
+                        f"Prompt tokens: {resp.usage.prompt_tokens}, "
+                        f"Completion tokens: {resp.usage.completion_tokens}. Error: {eval_exc}",
+                        component="LLMGateway",
+                        finish_reason=finish_reason,
+                        prompt_tokens=resp.usage.prompt_tokens,
+                        completion_tokens=resp.usage.completion_tokens,
+                    )
+                    # Convert to LLMValidationError so it's classified correctly
+                    if not isinstance(eval_exc, LLMValidationError):
+                        eval_exc = LLMValidationError(
+                            message=f"Contract structural validation failed: {eval_exc}",
+                            details={"error": str(eval_exc)},
+                        )
+                    raise eval_exc
+                return resp
 
             # Execute provider call with retry backoff wrapper
             response = await execute_with_retry(call_provider, max_retries=retry_count)
@@ -143,13 +204,56 @@ class LLMGateway:
             response.usage.latency_ms = round(latency_ms, 2)
             response.request_id = request_id
 
-            # Validate generated text response
-            validate_response_text(response.text, resolved_json_mode)
+            response_type = getattr(response, "response_type", "text")
+
+            # Store telemetry record in the execution context list
+            telemetry_record = {
+                "provider": response.usage.provider,
+                "model": response.usage.model,
+                "skill": template_name or "N/A",
+                "status": "SUCCESS",
+                "response_type": response_type,
+                "attempt_number": attempt_tracker["count"],
+                "max_attempts": retry_count + 1,
+                "retry_count": attempt_tracker["count"] - 1,
+                "latency_ms": response.usage.latency_ms,
+                "finish_reason": response.finish_reason,
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+            }
+
+            ctx.llm_telemetry.append(telemetry_record)
+
+            def val(v: Any) -> str:
+                return "Unavailable" if v is None else str(v)
+
+            # Format console log message
+            log_block = (
+                f"\n==================================================\n"
+                f"LLM REQUEST\n"
+                f"==================================================\n"
+                f"Provider: {val(response.usage.provider)}\n"
+                f"Model: {val(response.usage.model)}\n"
+                f"Skill: {val(template_name)}\n"
+                f"Status: SUCCESS\n"
+                f"Attempt: {val(attempt_tracker['count'])}/{val(retry_count + 1)}\n"
+                f"Retries: {val(attempt_tracker['count'] - 1)}\n"
+                f"Prompt Tokens: {val(response.usage.prompt_tokens)}\n"
+                f"Completion Tokens: {val(response.usage.completion_tokens)}\n"
+                f"Total Tokens: {val(response.usage.total_tokens)}\n"
+                f"Latency: {val(response.usage.latency_ms)} ms\n"
+                f"Finish Reason: {val(response.finish_reason)}\n"
+                f"Response Type: {val(response_type)}\n"
+                f"=================================================="
+            )
 
             # Log LLM Response success
             logger.info(
                 EventID.LLM_RESPONSE,
-                "LLM API request succeeded",
+                log_block,
                 component="LLMGateway",
                 request_id=request_id,
                 correlation_id=correlation_id,
@@ -158,7 +262,14 @@ class LLMGateway:
                 template_version=template_version,
                 provider=response.usage.provider,
                 model=response.usage.model,
+                skill=template_name or "N/A",
+                status="SUCCESS",
+                response_type=response_type,
+                attempt_number=attempt_tracker["count"],
+                max_attempts=retry_count + 1,
+                retry_count=attempt_tracker["count"] - 1,
                 latency_ms=response.usage.latency_ms,
+                finish_reason=response.finish_reason,
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
                 total_tokens=response.usage.total_tokens,
@@ -169,10 +280,109 @@ class LLMGateway:
 
         except Exception as exc:
             latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+            # Classify exception
+            def classify_exception(  # noqa: PLR0911
+                e: Exception,
+            ) -> tuple[str, str | None, str]:
+                from app.llm.exceptions import (
+                    LLMProviderError,
+                    LLMRateLimitError,
+                    LLMTimeoutError,
+                    LLMValidationError,
+                )
+
+                if isinstance(e, LLMValidationError):
+                    return "text", "STOP", "Contract Validation Failure"
+                if isinstance(e, LLMRateLimitError):
+                    return "rate_limit", None, "Rate Limit"
+                if isinstance(e, LLMTimeoutError):
+                    return "unknown", None, "Provider Timeout"
+                if isinstance(e, LLMProviderError):
+                    msg = str(e)
+                    resp_type = getattr(e, "response_type", "unknown")
+                    # If response_type is unknown but it's a rate limit error, promote it
+                    if "rate limit" in msg.lower():
+                        resp_type = "rate_limit"
+                    fr = getattr(e, "finish_reason", None)
+                    if "SAFETY" in msg:
+                        return "safety_block", "SAFETY", "Safety Block"
+                    if "RECITATION" in msg:
+                        return "recitation_block", "RECITATION", "Recitation Block"
+                    if "functionCall" in msg:
+                        return "function_call", fr, "Function Call Response"
+                    if "empty response candidate" in msg:
+                        return "empty_candidate", fr, "Empty Candidate"
+                    if "no text parts" in msg or "empty parts" in msg:
+                        return "empty_parts", fr, "Empty Parts"
+                    if "Failed to parse" in msg or "JSON" in msg:
+                        return "unknown", fr, "Invalid JSON"
+                    return resp_type, fr, "Unknown Provider Error"
+                return "unknown", None, "Unknown Provider Error"
+
+            response_type, finish_reason, error_status = classify_exception(exc)
+
+            # Extract tokens from exception if attached
+            prompt_tk = getattr(exc, "prompt_tokens", None)
+            completion_tk = getattr(exc, "completion_tokens", None)
+            total_tk = getattr(exc, "total_tokens", None)
+
+            # Extract provider error metadata
+            provider_error_code = getattr(exc, "provider_error_code", None)
+            provider_status = getattr(exc, "provider_status", None)
+            provider_message = getattr(exc, "provider_message", None)
+
+            # Store telemetry record in the execution context list
+            telemetry_record = {
+                "provider": provider_name,
+                "model": model,
+                "skill": template_name or "N/A",
+                "status": error_status,
+                "response_type": response_type,
+                "attempt_number": attempt_tracker["count"],
+                "max_attempts": retry_count + 1,
+                "retry_count": attempt_tracker["count"] - 1,
+                "latency_ms": round(latency_ms, 2),
+                "finish_reason": finish_reason,
+                "usage": {
+                    "prompt_tokens": prompt_tk,
+                    "completion_tokens": completion_tk,
+                    "total_tokens": total_tk,
+                },
+                "provider_error_code": provider_error_code,
+                "provider_status": provider_status,
+                "provider_message": provider_message,
+            }
+
+            ctx.llm_telemetry.append(telemetry_record)
+
+            def val(v: Any) -> str:
+                return "Unavailable" if v is None else str(v)
+
+            # Format console log message
+            log_block = (
+                f"\n==================================================\n"
+                f"LLM REQUEST\n"
+                f"==================================================\n"
+                f"Provider: {val(provider_name)}\n"
+                f"Model: {val(model)}\n"
+                f"Skill: {val(template_name)}\n"
+                f"Status: {val(error_status)}\n"
+                f"Attempt: {val(attempt_tracker['count'])}/{val(retry_count + 1)}\n"
+                f"Retries: {val(attempt_tracker['count'] - 1)}\n"
+                f"Prompt Tokens: {val(prompt_tk)}\n"
+                f"Completion Tokens: {val(completion_tk)}\n"
+                f"Total Tokens: {val(total_tk)}\n"
+                f"Latency: {val(round(latency_ms, 2))} ms\n"
+                f"Finish Reason: {val(finish_reason)}\n"
+                f"Response Type: {val(response_type)}\n"
+                f"=================================================="
+            )
+
             # Log LLM Failure
             logger.error(
                 EventID.LLM_ERROR,
-                f"LLM API request failed: {exc}",
+                log_block,
                 component="LLMGateway",
                 request_id=request_id,
                 correlation_id=correlation_id,
@@ -181,7 +391,17 @@ class LLMGateway:
                 template_version=template_version,
                 provider=provider_name,
                 model=model,
+                skill=template_name or "N/A",
+                status=error_status,
+                response_type=response_type,
+                attempt_number=attempt_tracker["count"],
+                max_attempts=retry_count + 1,
+                retry_count=attempt_tracker["count"] - 1,
                 latency_ms=round(latency_ms, 2),
+                finish_reason=finish_reason,
+                prompt_tokens=prompt_tk,
+                completion_tokens=completion_tk,
+                total_tokens=total_tk,
                 error=str(exc),
             )
             raise exc

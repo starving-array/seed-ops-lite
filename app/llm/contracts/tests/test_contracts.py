@@ -208,9 +208,9 @@ async def test_execute_contract_parsing_failure() -> None:
         total_tokens=100,
         estimated_cost=0.0,
     )
-    # Invalid JSON syntax
+    # Invalid JSON syntax that cannot be repaired
     mock_response = LLMResponse(
-        text='{"username": "alice", ',
+        text="This is not JSON at all!",
         usage=usage,
         raw_response={},
         request_id="req-id",

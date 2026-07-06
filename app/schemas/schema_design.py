@@ -81,6 +81,69 @@ class AIAssistantResponse(BaseModel):
         populate_by_alias = True
 
 
+class LLMDiagnosticUsage(BaseModel):
+    prompt_tokens: int | None = Field(default=None, alias="promptTokens")
+    completion_tokens: int | None = Field(default=None, alias="completionTokens")
+    total_tokens: int | None = Field(default=None, alias="totalTokens")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+class LLMDiagnostics(BaseModel):
+    provider: str
+    model: str
+    latency_ms: float | None = Field(default=None, alias="latencyMs")
+    attempt_number: int | None = Field(default=None, alias="attemptNumber")
+    max_attempts: int | None = Field(default=None, alias="maxAttempts")
+    retry_count: int | None = Field(default=None, alias="retryCount")
+    finish_reason: str | None = Field(default=None, alias="finishReason")
+    response_type: str | None = Field(default=None, alias="responseType")
+    usage: LLMDiagnosticUsage | None = None
+    skill_name: str | None = Field(default=None, alias="skillName")
+    status: str | None = Field(default=None, alias="status")
+    provider_error_code: int | None = Field(default=None, alias="providerErrorCode")
+    provider_status: str | None = Field(default=None, alias="providerStatus")
+    provider_message: str | None = Field(default=None, alias="providerMessage")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+class LLMSessionDiagnostics(BaseModel):
+    provider: str
+    model: str
+    total_latency_ms: float | None = Field(default=None, alias="totalLatencyMs")
+    attempt_number: int | None = Field(default=None, alias="attemptNumber")
+    max_attempts: int | None = Field(default=None, alias="maxAttempts")
+    total_retries: int | None = Field(default=None, alias="totalRetries")
+    finish_reason: str | None = Field(default=None, alias="finishReason")
+    response_type: str | None = Field(default=None, alias="responseType")
+    usage: LLMDiagnosticUsage | None = None
+    ai_status: str | None = Field(default=None, alias="aiStatus")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
+class AIAssistantDiagnosticsResponse(AIAssistantResponse):
+    result: AIAssistantResponse | None = None
+    session_diagnostics: LLMSessionDiagnostics | None = Field(
+        default=None, alias="sessionDiagnostics"
+    )
+    skills: list[LLMDiagnostics] | None = None
+    workflow_status: str | None = Field(default=None, alias="workflowStatus")
+    ai_status: str | None = Field(default=None, alias="aiStatus")
+    validation_status: str | None = Field(default=None, alias="validationStatus")
+
+    class Config:
+        populate_by_name = True
+        populate_by_alias = True
+
+
 class GenerateRequestModel(BaseModel):
     schema_state: SchemaModel = Field(..., alias="schemaState")
     row_targets: dict[str, int] = Field(..., alias="rowTargets")

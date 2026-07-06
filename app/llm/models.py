@@ -40,6 +40,9 @@ class LLMResponse(BaseModel):
     usage: TokenUsage = Field(
         description="Standardized token accounting and latency metrics."
     )
+    finish_reason: str | None = Field(
+        default=None, description="The reason the model stopped generating."
+    )
     raw_response: dict[str, Any] = Field(
         default_factory=dict,
         description="The raw payload structure returned by the provider.",
@@ -49,4 +52,8 @@ class LLMResponse(BaseModel):
     )
     correlation_id: str | None = Field(
         default=None, description="Correlation identifier for tracing."
+    )
+    response_type: str | None = Field(
+        default=None,
+        description="The classified type of the response (e.g., text, safety_block).",
     )

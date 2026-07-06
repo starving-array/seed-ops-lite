@@ -102,13 +102,17 @@ class MetricsCollector:
         self,
         stage_name: str,
         prompt_tokens: (
-            int | Literal["Unknown", "Not Yet Measured"]
+            int | None | Literal["Unknown", "Not Yet Measured"]
         ) = "Not Yet Measured",
         completion_tokens: (
-            int | Literal["Unknown", "Not Yet Measured"]
+            int | None | Literal["Unknown", "Not Yet Measured"]
         ) = "Not Yet Measured",
-        total_tokens: int | Literal["Unknown", "Not Yet Measured"] = "Not Yet Measured",
-        cost_usd: float | Literal["Unknown", "Not Yet Measured"] = "Not Yet Measured",
+        total_tokens: (
+            int | None | Literal["Unknown", "Not Yet Measured"]
+        ) = "Not Yet Measured",
+        cost_usd: (
+            float | None | Literal["Unknown", "Not Yet Measured"]
+        ) = "Not Yet Measured",
         calls_count: int = 1,
     ) -> None:
         """Record measured LLM usage token statistics for a stage."""

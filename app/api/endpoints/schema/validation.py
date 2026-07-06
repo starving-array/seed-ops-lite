@@ -8,6 +8,7 @@ from app.api.endpoints.schema.helpers import (
     RESERVED_KEYWORDS,
 )
 from app.schemas.schema_design import (
+    AIAssistantDiagnosticsResponse,
     AIAssistantResponse,
     AISuggestionModel,
     SchemaModel,
@@ -357,21 +358,190 @@ async def validate_schema(schema: SchemaModel) -> list[ValidationResultModel]:
     return results
 
 
-@router.post("/ai-assist", response_model=AIAssistantResponse)
-async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantResponse:
-    """Analyzes current schema design using SchemaValidationAgent and returns suggestions."""
+@router.post("/ai-assist", response_model=AIAssistantDiagnosticsResponse)
+async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantDiagnosticsResponse:
+    """Analyzes current schema design using SchemaValidationAgent and returns suggestions with telemetry diagnostics."""
 
     from app.agents.schema_validation.agent import SchemaValidationAgent
+    from app.core.context.context import get_context
+    from app.schemas.schema_design import (
+        LLMDiagnostics,
+        LLMDiagnosticUsage,
+        LLMSessionDiagnostics,
+    )
 
     start_time = time.perf_counter()
 
+    def build_response_with_diagnostics(
+        result: AIAssistantResponse,
+    ) -> AIAssistantDiagnosticsResponse:
+        ctx = get_context()
+        telemetry_list = ctx.llm_telemetry
+
+        # 1. Determine skill success/failure (FIX 1)
+        total_skills = len(telemetry_list)
+        success_skills = sum(1 for t in telemetry_list if t.get("status") == "SUCCESS")
+
+        # 2. Never return "Completed successfully" if every AI skill failed
+        if total_skills > 0 and success_skills == 0:
+            result.status = "Failed"
+            result.summary = "AI Schema Assistant is currently unavailable: All validation skills failed execution."
+            result.suggestions = []
+            workflow_status = "FAILED"
+        else:
+            workflow_status = "FAILED" if result.status == "Failed" else "SUCCESS"
+
+        # 3. Compute aggregate AI status (FIX 3)
+        if telemetry_list:
+            if success_skills == total_skills:
+                ai_status = "SUCCESS"
+            elif success_skills > 0:
+                ai_status = "PARTIAL_SUCCESS"
+            else:
+                statuses = [t.get("status") for t in telemetry_list]
+                if any(
+                    "Rate Limit" in s or "rate_limit" in s or s == "RATE_LIMITED"
+                    for s in statuses
+                    if s
+                ):
+                    ai_status = "RATE_LIMITED"
+                elif any("Cancelled" in s or s == "CANCELLED" for s in statuses if s):
+                    ai_status = "CANCELLED"
+                else:
+                    ai_status = "FAILED"
+        else:
+            ai_status = "SUCCESS"
+
+        # 4. Compute validation status
+        if result.status == "Failed" or result.suggestions:
+            validation_status = "FAILED"
+        else:
+            validation_status = "SUCCESS"
+
+        session_diagnostics = None
+        skills_diagnostics = None
+        if telemetry_list:
+            last_record = telemetry_list[-1]
+            total_latency = sum(t.get("latency_ms") or 0.0 for t in telemetry_list)
+            total_retries = sum(t.get("retry_count") or 0 for t in telemetry_list)
+
+            prompt_tokens_sum = None
+            completion_tokens_sum = None
+            total_tokens_sum = None
+
+            # Aggregation Rules (FIX 3):
+            # - Ignore null token values.
+            # - Failed requests without usageMetadata do not contribute token totals.
+            # - Session totals only aggregate provider-reported values.
+            # - Never substitute missing values with zero.
+            for t in telemetry_list:
+                status = t.get("status")
+                usage = t.get("usage") or {}
+                p_tokens = usage.get("prompt_tokens")
+                c_tokens = usage.get("completion_tokens")
+                t_tokens = usage.get("total_tokens")
+
+                # Failed requests without usageMetadata do not contribute token totals
+                if (
+                    status != "SUCCESS"
+                    and p_tokens is None
+                    and c_tokens is None
+                    and t_tokens is None
+                ):
+                    continue
+
+                if p_tokens is not None:
+                    prompt_tokens_sum = (prompt_tokens_sum or 0) + p_tokens
+                if c_tokens is not None:
+                    completion_tokens_sum = (completion_tokens_sum or 0) + c_tokens
+                if t_tokens is not None:
+                    total_tokens_sum = (total_tokens_sum or 0) + t_tokens
+
+            # Rename aggregate diagnostics fields so they cannot be confused with a single LLM request (FIX 2)
+            session_diagnostics = LLMSessionDiagnostics(
+                provider=last_record["provider"],
+                model=last_record["model"],
+                totalLatencyMs=round(total_latency, 2),
+                attemptNumber=last_record["attempt_number"],
+                maxAttempts=last_record["max_attempts"],
+                totalRetries=total_retries,
+                finishReason=last_record["finish_reason"],
+                responseType=last_record["response_type"],
+                usage=LLMDiagnosticUsage(
+                    promptTokens=prompt_tokens_sum,
+                    completionTokens=completion_tokens_sum,
+                    totalTokens=total_tokens_sum,
+                ),
+                aiStatus=ai_status,
+            )
+
+            # Build diagnostics per skill (FIX 4)
+            skills_diagnostics = []
+            for t in telemetry_list:
+                usage_info = t.get("usage") or {}
+                skills_diagnostics.append(
+                    LLMDiagnostics(
+                        provider=t.get("provider", "Google"),
+                        model=t.get("model", "unknown"),
+                        latencyMs=t.get("latency_ms"),
+                        attemptNumber=t.get("attempt_number"),
+                        maxAttempts=t.get("max_attempts"),
+                        retryCount=t.get("retry_count"),
+                        finishReason=t.get("finish_reason"),
+                        responseType=t.get("response_type"),
+                        skillName=t.get("skill"),
+                        status=t.get("status"),
+                        usage=LLMDiagnosticUsage(
+                            promptTokens=usage_info.get("prompt_tokens"),
+                            completionTokens=usage_info.get("completion_tokens"),
+                            totalTokens=usage_info.get("total_tokens"),
+                        ),
+                        providerErrorCode=t.get("provider_error_code"),
+                        providerStatus=t.get("provider_status"),
+                        providerMessage=t.get("provider_message"),
+                    )
+                )
+        else:
+            # Fallback diagnostics when no LLM telemetry was generated
+            session_diagnostics = LLMSessionDiagnostics(
+                provider="Google",
+                model="gemini-2.5-flash",
+                totalLatencyMs=None,
+                attemptNumber=None,
+                maxAttempts=None,
+                totalRetries=None,
+                finishReason=None,
+                responseType=None,
+                usage=LLMDiagnosticUsage(
+                    promptTokens=None,
+                    completionTokens=None,
+                    totalTokens=None,
+                ),
+                aiStatus=ai_status,
+            )
+            skills_diagnostics = []
+
+        return AIAssistantDiagnosticsResponse(
+            status=result.status,
+            summary=result.summary,
+            suggestions=result.suggestions,
+            executionDurationMs=result.execution_duration_ms,
+            result=result,
+            sessionDiagnostics=session_diagnostics,
+            skills=skills_diagnostics,
+            workflowStatus=workflow_status,
+            aiStatus=ai_status,
+            validationStatus=validation_status,
+        )
+
     if not schema.tables:
-        return AIAssistantResponse(
+        res = AIAssistantResponse(
             status="Completed",
             summary="No tables configured in the schema. Please add tables to begin design analysis.",
             suggestions=[],
             executionDurationMs=0.0,
         )
+        return build_response_with_diagnostics(res)
 
     try:
         ddl = generate_ddl_from_schema(schema)
@@ -447,17 +617,19 @@ async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantResponse:
             )
 
         duration_ms = (time.perf_counter() - start_time) * 1000.0
-        return AIAssistantResponse(
+        res = AIAssistantResponse(
             status="Completed",
             summary=report.summary,
             suggestions=suggestions,
             executionDurationMs=round(duration_ms, 2),
         )
+        return build_response_with_diagnostics(res)
     except Exception as exc:
         duration_ms = (time.perf_counter() - start_time) * 1000.0
-        return AIAssistantResponse(
+        res = AIAssistantResponse(
             status="Failed",
             summary=f"AI Schema Assistant is currently unavailable: {exc}",
             suggestions=[],
             executionDurationMs=round(duration_ms, 2),
         )
+        return build_response_with_diagnostics(res)

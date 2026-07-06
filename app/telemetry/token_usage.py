@@ -12,15 +12,17 @@ class TokenUsage(BaseModel):
     provider: str = Field(
         description="The API provider name (e.g. OpenAI, Google, Anthropic)"
     )
-    prompt_tokens: int = Field(default=0, description="Number of tokens in the prompt")
-    completion_tokens: int = Field(
-        default=0, description="Number of tokens in the completion response"
+    prompt_tokens: int | None = Field(
+        default=None, description="Number of tokens in the prompt"
     )
-    total_tokens: int = Field(
-        default=0, description="Total tokens consumed (prompt + completion)"
+    completion_tokens: int | None = Field(
+        default=None, description="Number of tokens in the completion response"
     )
-    estimated_cost: float = Field(
-        default=0.0, description="Estimated monetary cost of the API call in USD"
+    total_tokens: int | None = Field(
+        default=None, description="Total tokens consumed (prompt + completion)"
+    )
+    estimated_cost: float | None = Field(
+        default=None, description="Estimated monetary cost of the API call in USD"
     )
     latency_ms: float = Field(
         default=0.0,
