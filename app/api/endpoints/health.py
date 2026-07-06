@@ -1,6 +1,7 @@
 """Health check API endpoints."""
 
 import contextlib
+from typing import Any
 
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
@@ -404,7 +405,22 @@ async def health_check(response: Response) -> HealthResponse:
     except Exception:  # noqa: S110
         pass
 
-    llm_gateway_status = "ready" if settings.GEMINI_API_KEY else "api_key_missing"
+    # Resolve LLM config via the authoritative config_resolver (not legacy fields)
+    import contextlib as _contextlib
+
+    _llm_cfg: dict[str, Any] = {}
+    with _contextlib.suppress(Exception):
+        from app.llm.config_resolver import resolve_llm_config
+
+        _llm_cfg = resolve_llm_config()
+
+    _llm_api_key_set = bool(_llm_cfg.get("api_key"))
+    _llm_enabled = bool(_llm_cfg.get("enabled", False))
+    _llm_provider = (_llm_cfg.get("provider") or "google").capitalize()
+    _llm_model = _llm_cfg.get("model") or settings.GEMINI_MODEL
+    llm_gateway_status = (
+        "ready" if (_llm_api_key_set and _llm_enabled) else "api_key_missing"
+    )
 
     return HealthResponse(
         status=overall_status,
@@ -458,12 +474,12 @@ async def health_check(response: Response) -> HealthResponse:
         services=services,
         debug_mode=settings.APP_DEBUG,
         llm_status=LLMConfigStatus(
-            provider="Gemini",
-            model=settings.GEMINI_MODEL,
+            provider=_llm_provider,
+            model=_llm_model,
             gateway_status=llm_gateway_status,
             retry_count=settings.LLM_MAX_RETRIES,
             timeout=settings.LLM_TIMEOUT,
-            api_key_configured=bool(settings.GEMINI_API_KEY),
+            api_key_configured=_llm_api_key_set,
         ),
         repository_status=RepositoryStatus(
             git_branch=git_branch,
