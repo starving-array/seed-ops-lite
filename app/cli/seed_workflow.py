@@ -23,6 +23,7 @@ def print_help() -> None:
   status   - Check repository status and run quality gates (Active)
   commit   - Stage, verify quality gates, and commit changes (Active)
   freeze   - Freeze development phase and tag release (Active)
+  dev      - One-command developer startup experience (Active)
   check    - Verify project structure (Planned)
   push     - Push committed branch to remote (Planned)
   release  - Generate changelog and release tags (Planned)
@@ -45,6 +46,7 @@ def main() -> None:
         "status": "repository_status.py",
         "commit": "commit.py",
         "freeze": "freeze_phase.py",
+        "dev": "dev_startup.py",
     }
 
     planned_commands = {

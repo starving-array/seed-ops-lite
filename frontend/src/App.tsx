@@ -22,6 +22,7 @@ import {
 import { Badge } from './components/ui'
 import { healthService } from './services/health'
 import { SchemaProvider } from './context/SchemaContext'
+import { ProjectProvider, useProjects } from './context/ProjectContext'
 import {
   Dashboard,
   Projects,
@@ -34,12 +35,14 @@ import {
   Settings,
   About,
   NotFound,
+  ERDiagram,
 } from './pages'
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: '📊' },
   { path: '/projects', label: 'Projects', icon: '📁' },
   { path: '/schema-generator', label: 'Schema Generator', icon: '🛠️' },
+  { path: '/er-diagram', label: 'ER Diagram', icon: '🖼️' },
   { path: '/schema-validation', label: 'Schema Validation', icon: '🛡️' },
   { path: '/data-generation', label: 'Data Generation', icon: '⚙️' },
   { path: '/job-history', label: 'Job History', icon: '⏱️' },
@@ -61,6 +64,7 @@ function AppContent() {
   const { currentPageTitle, setCurrentPageTitle } = useUIState()
   const { setIsLoading } = useLoading()
   const { addNotification } = useNotifications()
+  const { projects, activeProjectId, selectProject } = useProjects()
   const location = useLocation()
 
   const [connectionStatus, setConnectionStatus] = useState<
@@ -289,10 +293,24 @@ function AppContent() {
                           ? 'warning'
                           : 'error'
                   }
-                  className="normal-case text-[10px] py-0.5 px-2 font-bold"
+                  className="normal-case text-[10px] py-0.5 px-2 font-bold mr-2"
                 >
                   {connectionStatus}
                 </Badge>
+                <select
+                  value={activeProjectId}
+                  onChange={(e) => selectProject(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-1.5 cursor-pointer hover:bg-slate-750 transition-all font-medium"
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      📁 {p.name}
+                    </option>
+                  ))}
+                  {projects.length === 0 && (
+                    <option value="default">📁 Default Project</option>
+                  )}
+                </select>
               </div>
             </div>
 
@@ -352,6 +370,7 @@ function AppContent() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/projects" element={<Projects />} />
               <Route path="/schema-generator" element={<SchemaGenerator />} />
+              <Route path="/er-diagram" element={<ERDiagram />} />
               <Route
                 path="/schema-validation"
                 element={<SchemaValidation />}
@@ -392,11 +411,13 @@ export default function App() {
   return (
     <AppProvider>
       <NotificationProvider>
-        <SchemaProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </SchemaProvider>
+        <ProjectProvider>
+          <SchemaProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </SchemaProvider>
+        </ProjectProvider>
       </NotificationProvider>
     </AppProvider>
   )

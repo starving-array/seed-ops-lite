@@ -5,7 +5,7 @@ import uuid
 
 from app.core.context.context import get_context
 from app.core.logging.logging import logger
-from app.core.settings.config import settings
+from app.llm.config_resolver import resolve_llm_config, validate_llm_config
 from app.llm.models import LLMRequest, LLMResponse
 from app.llm.provider import GeminiProvider, LLMProvider
 from app.llm.retry import execute_with_retry
@@ -45,21 +45,32 @@ class LLMGateway:
         Raises:
             Exception: Any validation or transient error if retries fail.
         """
+        # Resolve configuration centrally
+        llm_config = resolve_llm_config()
+        validate_llm_config(llm_config)
+
         ctx = get_context()
         request_id = str(uuid.uuid4())
         correlation_id = ctx.correlation_id or str(uuid.uuid4())
 
+        configured_model = llm_config["model"]
+        configured_provider = llm_config["provider"].capitalize()
+        configured_timeout = llm_config["timeout"]
+        configured_retries = llm_config["max_retries"]
+
         if isinstance(request, RenderedPrompt):
             prompt_text = request.prompt_text
             system_instruction = request.system_instruction
-            model = request.model or settings.GEMINI_MODEL
+            model = request.model or configured_model
             temperature = (
-                request.temperature if request.temperature is not None else 0.0
+                request.temperature
+                if request.temperature is not None
+                else llm_config["temperature"]
             )
             max_tokens = (
                 request.max_output_tokens
                 if request.max_output_tokens is not None
-                else 2048
+                else llm_config["max_output_tokens"]
             )
 
             # If json_mode is not explicitly specified, inspect expected_response or prompt
@@ -81,23 +92,23 @@ class LLMGateway:
             prompt_hash = request.prompt_hash
             template_name = request.template_name
             template_version = request.template_version
-            timeout = request.timeout_seconds or settings.LLM_TIMEOUT
-            retry_count = request.retry_count or settings.LLM_MAX_RETRIES
-            provider_name = request.provider or "Google"
+            timeout = request.timeout_seconds or configured_timeout
+            retry_count = request.retry_count or configured_retries
+            provider_name = request.provider or configured_provider
         else:
             provider_request = request
             prompt_text = request.prompt
             system_instruction = request.system_instruction
-            model = request.model or settings.GEMINI_MODEL
+            model = request.model or configured_model
             resolved_json_mode = (
                 json_mode if json_mode is not None else request.json_mode
             )
             prompt_hash = None
             template_name = None
             template_version = None
-            timeout = settings.LLM_TIMEOUT
-            retry_count = settings.LLM_MAX_RETRIES
-            provider_name = "Google"
+            timeout = configured_timeout
+            retry_count = configured_retries
+            provider_name = configured_provider
 
         start_time = time.perf_counter()
 

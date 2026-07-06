@@ -9,6 +9,7 @@ import {
 import type { ReactNode } from 'react'
 import { schemaService } from '../services/schema'
 import { useNotifications } from './NotificationContext'
+import { useProjects } from './ProjectContext'
 
 export interface Column {
   id: string
@@ -59,9 +60,10 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'failed' | 'idle'>('idle')
   const { addNotification } = useNotifications()
 
+  const { activeProjectId } = useProjects()
   const isLoadedRef = useRef(false)
 
-  // 1. Load schema from backend on startup
+  // 1. Load schema from backend on startup and active project changes
   useEffect(() => {
     const fetchSchema = async () => {
       try {
@@ -73,7 +75,7 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
           addNotification({
             type: 'success',
             title: 'Schema Registry Loaded',
-            message: 'Database schema configuration loaded from backend successfully.',
+            message: `Database schema configuration loaded from backend successfully for project '${activeProjectId}'.`,
           })
         } else {
           addNotification({
@@ -98,7 +100,7 @@ export const SchemaProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     fetchSchema()
-  }, [addNotification])
+  }, [activeProjectId, addNotification])
 
   // Explicit Save manual function
   const triggerSave = async () => {

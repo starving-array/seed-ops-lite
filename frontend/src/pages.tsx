@@ -14,6 +14,7 @@ import {
 export { Dashboard } from './features/dashboard/Dashboard'
 export { Projects } from './features/projects/Projects'
 export { SchemaGenerator } from './features/schema-designer/SchemaDesigner'
+export { ERDiagram } from './features/er-diagram/ERDiagram'
 
 interface PageProps {
   title: string

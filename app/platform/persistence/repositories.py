@@ -7,13 +7,24 @@ class ProjectRepository(ABC):
     """Repository interface for project workspace metadata."""
 
     @abstractmethod
-    async def create_project(self, project_id: str, name: str) -> dict[str, Any]:
+    async def create_project(
+        self,
+        project_id: str,
+        name: str,
+        description: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
         """Create a new project workspace record."""
         pass
 
     @abstractmethod
     async def get_project(self, project_id: str) -> dict[str, Any] | None:
         """Retrieve details of a single project."""
+        pass
+
+    @abstractmethod
+    async def list_projects(self) -> list[dict[str, Any]]:
+        """Retrieve list of all projects."""
         pass
 
 

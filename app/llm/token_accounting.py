@@ -34,14 +34,30 @@ def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> fl
     """
     model_lower = model.lower()
 
-    # Gemini 1.5 Pro
-    if "gemini-1.5-pro" in model_lower:
+    # Gemini pricing tiers
+    if "gemini" in model_lower and "pro" in model_lower:
         input_rate = 1.25 / 1_000_000
         output_rate = 5.00 / 1_000_000
-    # Gemini 1.5 Flash
-    elif "gemini-1.5-flash" in model_lower:
+    elif "gemini" in model_lower and "flash" in model_lower:
         input_rate = 0.075 / 1_000_000
         output_rate = 0.30 / 1_000_000
+    # OpenAI pricing tiers
+    elif "gpt-4o" in model_lower:
+        input_rate = 2.50 / 1_000_000
+        output_rate = 10.00 / 1_000_000
+    elif "gpt-4o-mini" in model_lower:
+        input_rate = 0.15 / 1_000_000
+        output_rate = 0.60 / 1_000_000
+    # Anthropic pricing tiers
+    elif "claude" in model_lower and "opus" in model_lower:
+        input_rate = 15.00 / 1_000_000
+        output_rate = 75.00 / 1_000_000
+    elif "claude" in model_lower and "sonnet" in model_lower:
+        input_rate = 3.00 / 1_000_000
+        output_rate = 15.00 / 1_000_000
+    elif "claude" in model_lower and "haiku" in model_lower:
+        input_rate = 0.25 / 1_000_000
+        output_rate = 1.25 / 1_000_000
     # General Fallback
     else:
         input_rate = 1.00 / 1_000_000

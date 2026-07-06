@@ -9,7 +9,7 @@ from app.services.developer_startup import DeveloperStartupManager, EnvironmentV
 def test_dev_configuration_loading() -> None:
     """Verify PlatformSettings startup configurations loaded correctly."""
     assert platform_settings.PLATFORM_DEV_PORT == 8000
-    assert platform_settings.PLATFORM_DEV_STARTUP_TIMEOUT_SECONDS == 30
+    assert platform_settings.PLATFORM_DEV_STARTUP_TIMEOUT_SECONDS == 60
     assert platform_settings.PLATFORM_DEV_HEALTH_CHECK_INTERVAL_SECONDS == 5
     assert platform_settings.PLATFORM_DEV_AUTO_SEED is True
 
@@ -48,9 +48,9 @@ def test_startup_sequence_success() -> None:
     """Verify startup flows, metrics recording, and diagnostics checks."""
     mgr = DeveloperStartupManager()
 
-    # 1. Execute Dry Run
-    # Use a backup free port dynamically to ensure success if port 8000 is occupied
+    # Use backup free ports dynamically to ensure success if standard ports are occupied
     platform_settings.PLATFORM_DEV_PORT = 19842
+    platform_settings.PLATFORM_DEV_FRONTEND_PORT = 19843
 
     res = mgr.run_dev_startup(dry_run=True)
     assert res.success is True

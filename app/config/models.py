@@ -74,10 +74,12 @@ class ExportConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM Gateway request retry and latency parameters config."""
 
-    gemini_api_key: str | None = Field(default=None)
-    gemini_model: str = Field(default="gemini-1.5-pro")
+    provider: str = Field(default="google")
+    model: str = Field(default="gemini-2.5-flash")
     max_retries: int = Field(default=3)
     timeout: float = Field(default=30.0)
+    temperature: float = Field(default=0.2)
+    max_output_tokens: int = Field(default=8192)
 
 
 class ObservabilityConfig(BaseModel):
@@ -156,11 +158,11 @@ class RuntimeConfiguration(BaseModel):
 
     @property
     def GEMINI_API_KEY(self) -> str | None:
-        return self.llm.gemini_api_key
+        return None
 
     @property
     def GEMINI_MODEL(self) -> str:
-        return self.llm.gemini_model
+        return self.llm.model
 
     @property
     def LLM_MAX_RETRIES(self) -> int:

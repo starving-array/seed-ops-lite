@@ -7,26 +7,30 @@ SafeSeedOps Lite is an enterprise-grade synthetic relational database generator 
 ## Quick Start
 
 ### 1. Developer Environment Bootstrap
-Install dependencies and initialize the workspace checklist:
+Install dependencies:
 ```bash
 # Setup dependencies and validation tools
 uv sync
-
-# Run diagnostics and pre-flight checks
-uv run seed status
 ```
 
-### 2. Launch Developer Mode
-Run the FastAPI backend server:
+### 2. Unified Developer Startup
+Launch both frontend and backend development environments automatically:
 ```bash
-uvicorn app.main:app --reload --port 8000
+uv run seed dev
 ```
-In a separate terminal, launch the frontend React SPA client:
-```bash
-cd frontend
-npm install
-npm run dev
-```
+
+### 3. Advanced Alternative (Manual Startup)
+If you prefer running the processes in separate terminal instances manually:
+*   **Start the Backend:**
+    ```bash
+    uvicorn app.main:app --reload --port 8000
+    ```
+*   **Start the Frontend:**
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
 
 ---
 

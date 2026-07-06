@@ -129,7 +129,7 @@ async def test_agent_end_to_end_success() -> None:
     """Test full sequential execution of the agent, mocking all LLM responses."""
     usage = TokenUsage(
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         latency_ms=50.0,
     )
 
@@ -206,7 +206,7 @@ async def test_agent_with_failed_skill_reports_warning() -> None:
     """Verify that if one skill fails, the agent continues and reports a warning in the output."""
     usage = TokenUsage(
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         latency_ms=50.0,
     )
 

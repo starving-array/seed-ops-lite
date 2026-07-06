@@ -90,7 +90,7 @@ def test_record_llm_and_gateway_usage() -> None:
 
     # 2. Extract from LLMResponse
     usage = TokenUsage(
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         provider="Google",
         prompt_tokens=200,
         completion_tokens=100,

@@ -23,6 +23,7 @@ from app.core.logging.logging import logger
 from app.core.middleware.middleware import (
     CorrelationIdMiddleware,
     ExceptionLoggingMiddleware,
+    ProjectMiddleware,
 )
 from app.core.settings.config import settings
 from app.core.version import APP_VERSION
@@ -163,6 +164,7 @@ def create_app() -> FastAPI:
     # correlation ID context.
     app.add_middleware(ExceptionLoggingMiddleware)
     app.add_middleware(CorrelationIdMiddleware)
+    app.add_middleware(ProjectMiddleware)
 
     # Configure CORS middleware last so it is executed outer-most on responses/exceptions
     app.add_middleware(

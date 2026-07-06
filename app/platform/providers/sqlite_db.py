@@ -44,6 +44,7 @@ class SQLiteDatabaseManager:
         if self._engine:
             return
         try:
+            print("Checking SQLite...", flush=True)  # noqa: T201
             # Ensure parent directories exist
             from pathlib import Path
 
@@ -74,6 +75,7 @@ class SQLiteDatabaseManager:
 
             # Perform liveness and integrity validation check
             self.verify_health()
+            print(" SQLite healthy", flush=True)  # noqa: T201
 
             # Execute pending migrations programmatically
             if run_migrations:

@@ -155,3 +155,16 @@ class ExceptionLoggingMiddleware(BaseHTTPMiddleware):
                     },
                 },
             )
+
+
+class ProjectMiddleware(BaseHTTPMiddleware):
+    """Middleware that extracts the Project ID from headers and sets the context."""
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        from app.platform.persistence.resolver import ProjectResolver
+
+        project_id = request.headers.get("x-project-id", "default")
+        ProjectResolver.set_active_project_id(project_id)
+        return await call_next(request)

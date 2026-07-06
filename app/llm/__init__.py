@@ -1,5 +1,6 @@
 """LLM Gateway package for structured, secure language model communications."""
 
+from app.llm.config_resolver import resolve_llm_config, validate_llm_config
 from app.llm.exceptions import (
     LLMConfigurationError,
     LLMException,
@@ -24,4 +25,6 @@ __all__ = [
     "LLMTimeoutError",
     "LLMRateLimitError",
     "LLMValidationError",
+    "resolve_llm_config",
+    "validate_llm_config",
 ]

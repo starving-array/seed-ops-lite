@@ -795,7 +795,7 @@ export const StatusDiagnosticsCard = ({
                 </div>
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-800/20 text-xs">
                   <span className="text-slate-400">Model</span>
-                  <span className="font-mono text-slate-200">{data?.llm_status?.model || 'gemini-1.5-pro'}</span>
+                  <span className="font-mono text-slate-200">{data?.llm_status?.model || 'gemini-2.5-flash'}</span>
                 </div>
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-800/20 text-xs">
                   <span className="text-slate-400">Gateway Status</span>

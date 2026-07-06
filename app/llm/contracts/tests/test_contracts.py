@@ -114,7 +114,7 @@ async def test_execute_contract_success() -> None:
 
     usage = TokenUsage(
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         latency_ms=450.0,
         prompt_tokens=100,
         completion_tokens=50,
@@ -142,7 +142,7 @@ async def test_execute_contract_success() -> None:
         assert result.metadata.correlation_id == "corr-id"
 
         assert result.metadata.provider == "Google"
-        assert result.metadata.model == "gemini-1.5-pro"
+        assert result.metadata.model == "gemini-2.5-flash"
         assert result.metadata.prompt_hash == "hash-value"
         assert result.metadata.prompt_version == "1.1.0"
         assert result.metadata.finish_reason == "STOP"
@@ -201,7 +201,7 @@ async def test_execute_contract_parsing_failure() -> None:
 
     usage = TokenUsage(
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         latency_ms=300.0,
         prompt_tokens=100,
         completion_tokens=0,
@@ -253,7 +253,7 @@ async def test_execute_contract_validation_failure() -> None:
 
     usage = TokenUsage(
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         latency_ms=300.0,
         prompt_tokens=100,
         completion_tokens=10,

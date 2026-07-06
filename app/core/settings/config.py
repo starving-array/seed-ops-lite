@@ -49,10 +49,30 @@ class Settings(BaseSettings):
     SLOW_LOG_THRESHOLD_MS: float = Field(default=500.0)
 
     # LLM Gateway Configurations
-    GEMINI_API_KEY: str | None = Field(default=None)
-    GEMINI_MODEL: str = Field(default="gemini-1.5-pro")
+    LLM_PROVIDER: str = Field(default="google")
     LLM_MAX_RETRIES: int = Field(default=3)
     LLM_TIMEOUT: float = Field(default=30.0)
+    LLM_TEMPERATURE: float = Field(default=0.2)
+    LLM_MAX_OUTPUT_TOKENS: int = Field(default=8192)
+
+    # Google Provider
+    GOOGLE_ENABLED: bool = Field(default=True)
+    GOOGLE_API_KEY: str | None = Field(default=None)
+    GOOGLE_MODEL: str = Field(default="gemini-2.5-flash")
+
+    # OpenAI Provider
+    OPENAI_ENABLED: bool = Field(default=False)
+    OPENAI_API_KEY: str | None = Field(default=None)
+    OPENAI_MODEL: str | None = Field(default=None)
+
+    # Anthropic Provider
+    ANTHROPIC_ENABLED: bool = Field(default=False)
+    ANTHROPIC_API_KEY: str | None = Field(default=None)
+    ANTHROPIC_MODEL: str | None = Field(default=None)
+
+    # Legacy Aliases (backward compatibility)
+    GEMINI_API_KEY: str | None = Field(default=None)
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash")
 
     # Email Branding Configurations
     DEFAULT_EMAIL_DOMAIN: str = Field(default="seedops.com")

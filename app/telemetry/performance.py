@@ -196,7 +196,7 @@ def log_llm_observation(
     Args:
         success: Whether the LLM call succeeded.
         provider: API provider name (e.g. ``"Google"``).
-        model: Model identifier (e.g. ``"gemini-1.5-pro"``).
+        model: Model identifier (e.g. ``"gemini-2.5-flash"``).
         workflow_id: Active workflow/generation run identifier.
         table: Schema table being generated (if applicable).
         prompt_tokens: Token count of the input prompt.

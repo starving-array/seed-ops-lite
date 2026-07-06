@@ -75,7 +75,7 @@ class PrettyConsoleFormatter:
         ┌─[ INFO  ]─[ LLMGateway ]────────────────────────────────────┐
         │ LLM API request succeeded  (duration_ms=142.3)
         │   provider        = Google
-        │   model           = gemini-1.5-pro
+        │   model           = gemini-2.5-flash
         │   correlation_id  = abc-123
         └─────────────────────────────────────────────────────────────┘
 

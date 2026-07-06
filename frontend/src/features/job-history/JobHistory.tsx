@@ -58,7 +58,12 @@ export const JobHistory = () => {
             return true
           })
 
-          setJobs(filtered)
+          setJobs((prev) => {
+            if (JSON.stringify(prev) !== JSON.stringify(filtered)) {
+              return filtered
+            }
+            return prev
+          })
 
           // Notification checks on status transitions
           filtered.forEach((job) => {
@@ -86,14 +91,6 @@ export const JobHistory = () => {
             }
             prevJobsRef.current[job.jobId] = job.status
           })
-
-          // Keep selected job reference fresh
-          if (selectedJob) {
-            const updatedSelected = freshJobs.find((j) => j.jobId === selectedJob.jobId)
-            if (updatedSelected) {
-              setSelectedJob(updatedSelected)
-            }
-          }
         }
       } catch (err: any) {
         console.error('Error fetching jobs:', err)
@@ -101,8 +98,18 @@ export const JobHistory = () => {
         if (showLoading) setLoading(false)
       }
     },
-    [searchQuery, statusFilter, typeFilter, dateFilter, selectedJob, addNotification]
+    [searchQuery, statusFilter, typeFilter, dateFilter, addNotification]
   )
+
+  // Keep selected job reference fresh
+  useEffect(() => {
+    if (selectedJob) {
+      const updatedSelected = jobs.find((j) => j.jobId === selectedJob.jobId)
+      if (updatedSelected && JSON.stringify(updatedSelected) !== JSON.stringify(selectedJob)) {
+        setSelectedJob(updatedSelected)
+      }
+    }
+  }, [jobs, selectedJob])
 
   // Poll job list for real-time monitoring
   useEffect(() => {

@@ -135,7 +135,7 @@ def test_asset_loader_success() -> None:
     assert template.version == "1.0.0"
     assert template.metadata is not None
     assert template.metadata.provider == "Google"
-    assert template.metadata.model == "gemini-1.5-pro"
+    assert template.metadata.model is None
     assert template.metadata.temperature == 0.1
 
     # Test rendering the loaded prompt template
@@ -146,7 +146,7 @@ def test_asset_loader_success() -> None:
     assert "### Task Instructions" in rendered.prompt_text
     assert "CREATE TABLE customers" in rendered.prompt_text
     assert rendered.provider == "Google"
-    assert rendered.model == "gemini-1.5-pro"
+    assert rendered.model is None
     assert rendered.temperature == 0.1
     assert rendered.expected_response is not None
     assert rendered.estimated_tokens > 0
@@ -271,7 +271,7 @@ def test_prompt_renderer_propagates_metadata() -> None:
         description="A test prompt",
         owner="test-owner",
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         temperature=0.7,
         max_output_tokens=1000,
         timeout_seconds=60.0,
@@ -295,7 +295,7 @@ def test_prompt_renderer_propagates_metadata() -> None:
     assert rendered.template_name == "test_meta"
     assert rendered.template_version == "1.0.0"
     assert rendered.provider == "Google"
-    assert rendered.model == "gemini-1.5-pro"
+    assert rendered.model == "gemini-2.5-flash"
     assert rendered.temperature == 0.7
     assert rendered.max_output_tokens == 1000
     assert rendered.timeout_seconds == 60.0

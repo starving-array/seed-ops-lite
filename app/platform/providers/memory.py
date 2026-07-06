@@ -10,10 +10,19 @@ from app.platform.runtime.interfaces import RuntimeProvider
 class MemoryPersistenceProvider(PersistenceProvider):
     """In-memory implementation of the PersistenceProvider interface for mock testing."""
 
-    async def create_project(self, project_id: str, name: str) -> dict[str, Any]:
+    async def create_project(
+        self,
+        project_id: str,
+        name: str,
+        description: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
         raise NotImplementedError()
 
     async def get_project(self, project_id: str) -> dict[str, Any] | None:
+        raise NotImplementedError()
+
+    async def list_projects(self) -> list[dict[str, Any]]:
         raise NotImplementedError()
 
     async def save_schema(

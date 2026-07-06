@@ -102,6 +102,45 @@ export const schemaService = {
   startExport: async (payload: ExportSettings): Promise<ApiResponse<Job>> => {
     return apiClient.post<Job>('/schema/export', payload)
   },
+
+  importSchema: async (payload: {
+    content?: string
+    fileType?: string
+    file?: File
+  }): Promise<ApiResponse<{ tables: Table[]; relationships: Relationship[] }>> => {
+    const formData = new FormData()
+    if (payload.content) formData.append('content', payload.content)
+    if (payload.fileType) formData.append('file_type', payload.fileType)
+    if (payload.file) formData.append('file', payload.file)
+    return apiClient.post<{ tables: Table[]; relationships: Relationship[] }>(
+      '/schema/import',
+      formData
+    )
+  },
+
+  getStats: async (): Promise<ApiResponse<{
+    projects_count: number
+    schemas_count: number
+    total_generated_rows: number
+    jobs_count: number
+    exports_count: number
+    validation_statistics: {
+      total_runs: number
+      passed: number
+      failed: number
+    }
+    token_usage: {
+      total_tokens: number
+      input_tokens: number
+      output_tokens: number
+      tokens_per_job: number
+      active_model: string
+      active_provider: string
+      estimated_cost_usd: number
+    }
+  }>> => {
+    return apiClient.get('/schema/stats')
+  },
 }
 
 export interface AISuggestion {
