@@ -34,6 +34,8 @@ def resolve_llm_config() -> dict[str, Any]:
     db_model = get_app_setting_sync("ai_active_model")
     db_temp = get_app_setting_sync("ai_temperature")
     db_tokens = get_app_setting_sync("ai_max_output_tokens")
+    db_failover = get_app_setting_sync("ai_auto_failover")
+    db_fallback_order = get_app_setting_sync("ai_fallback_order")
 
     # 2. Environment variables & fallback defaults
     # LLM Provider
@@ -44,23 +46,18 @@ def resolve_llm_config() -> dict[str, Any]:
 
     # Model
     model = None
-    if db_model:
-        model = db_model.strip()
-    elif provider == "google":
-        model = getattr(settings, "GOOGLE_MODEL", None)
-    elif provider == "openai":
-        model = getattr(settings, "OPENAI_MODEL", None)
-    elif provider == "anthropic":
-        model = getattr(settings, "ANTHROPIC_MODEL", None)
+    model = db_model.strip() if db_model else getattr(settings, "LLM_MODEL", None)
 
-    # Built-in defaults fallback
+    # Built-in defaults fallback per provider
     if not model:
-        if provider == "google":
+        if provider in ("google", "gemini", "vertex"):
             model = "gemini-2.5-flash"
-        elif provider == "openai":
+        elif provider in ("openai", "azure"):
             model = "gpt-4o"
         elif provider == "anthropic":
             model = "claude-3-5-sonnet"
+        elif provider == "ollama":
+            model = "llama3"
         else:
             model = "gemini-2.5-flash"
 
@@ -83,21 +80,50 @@ def resolve_llm_config() -> dict[str, Any]:
     timeout = getattr(settings, "LLM_TIMEOUT", 30.0)
     max_retries = getattr(settings, "LLM_MAX_RETRIES", 3)
 
-    # Resolve API Key & Enabled Flag
-    api_key = None
-    enabled = False
+    # Auto Failover & Fallback Order
+    auto_failover = True
+    if db_failover is not None:
+        auto_failover = db_failover.lower() == "true"
+    else:
+        env_failover = getattr(settings, "LLM_AUTO_FAILOVER", "true")
+        if isinstance(env_failover, bool):
+            auto_failover = env_failover
+        else:
+            auto_failover = str(env_failover).lower() == "true"
 
-    if provider == "google":
+    fallback_order_list = ["vertex", "gemini", "anthropic", "openai", "ollama"]
+    fallback_order_str = db_fallback_order or getattr(
+        settings, "LLM_FALLBACK_ORDER", None
+    )
+    if fallback_order_str:
+        if isinstance(fallback_order_str, list):
+            fallback_order_list = fallback_order_str
+        else:
+            fallback_order_list = [
+                x.strip().lower()
+                for x in str(fallback_order_str).split(",")
+                if x.strip()
+            ]
+
+    # Resolve active API Key based on provider
+    api_key = None
+    enabled = True
+
+    if provider in ("google", "gemini"):
         api_key = getattr(settings, "GOOGLE_API_KEY", None) or getattr(
             settings, "GEMINI_API_KEY", None
         )
-        enabled = getattr(settings, "GOOGLE_ENABLED", True)
+    elif provider == "vertex":
+        # Vertex uses ADC or GCP variables
+        api_key = getattr(settings, "GOOGLE_CLOUD_PROJECT", None)
     elif provider == "openai":
         api_key = getattr(settings, "OPENAI_API_KEY", None)
-        enabled = getattr(settings, "OPENAI_ENABLED", False)
     elif provider == "anthropic":
         api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
-        enabled = getattr(settings, "ANTHROPIC_ENABLED", False)
+    elif provider == "azure":
+        api_key = getattr(settings, "AZURE_OPENAI_API_KEY", None)
+    elif provider == "ollama":
+        api_key = "local"
 
     return {
         "provider": provider,
@@ -108,20 +134,20 @@ def resolve_llm_config() -> dict[str, Any]:
         "max_retries": max_retries,
         "api_key": api_key,
         "enabled": enabled,
+        "auto_failover": auto_failover,
+        "fallback_order": fallback_order_list,
     }
 
 
 def validate_llm_config(config: dict[str, Any]) -> None:
-    """Validate LLM config parameters."""
-    provider = config.get("provider")
-    if provider == "gemini":
-        provider = "google"
-        config["provider"] = "google"
-    if provider not in ("google", "openai", "anthropic"):
-        raise LLMConfigurationError(f"Unsupported LLM provider: {provider}")
+    """Validate LLM config parameters using provider registry."""
+    provider = str(config.get("provider") or "google")
+    from app.llm.provider import provider_registry
 
-    if not config.get("enabled"):
-        raise LLMConfigurationError(f"LLM provider is not enabled: {provider}")
+    try:
+        provider_registry.getProvider(provider)
+    except Exception as exc:
+        raise LLMConfigurationError(f"Unsupported LLM provider: {provider}") from exc
 
     # Bypass api key validation in testing environments
     import sys
@@ -132,7 +158,7 @@ def validate_llm_config(config: dict[str, Any]) -> None:
     )
     if not is_testing and not config.get("api_key"):
         raise LLMConfigurationError(
-            f"API key is not configured for provider: {provider}"
+            f"Credentials/keys not configured for provider: {provider}"
         )
 
     if not config.get("model"):

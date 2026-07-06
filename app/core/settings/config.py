@@ -50,6 +50,9 @@ class Settings(BaseSettings):
 
     # LLM Gateway Configurations
     LLM_PROVIDER: str = Field(default="google")
+    LLM_MODEL: str = Field(default="gemini-2.5-flash")
+    LLM_AUTO_FAILOVER: bool = Field(default=True)
+    LLM_FALLBACK_ORDER: str = Field(default="vertex,gemini,anthropic,openai,ollama")
     LLM_MAX_RETRIES: int = Field(default=3)
     LLM_TIMEOUT: float = Field(default=30.0)
     LLM_TEMPERATURE: float = Field(default=0.2)
