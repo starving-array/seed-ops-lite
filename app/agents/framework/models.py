@@ -62,8 +62,9 @@ class AgentConfiguration(BaseModel):
     temperature: float = Field(
         default=0.0, description="AI model generation temperature."
     )
-    model: str = Field(
-        default="gemini-1.5-pro", description="Underlying provider model version."
+    model: str | None = Field(
+        default=None,
+        description="Underlying provider model version (resolved from config if None).",
     )
     maximum_tokens: int = Field(
         default=2048, description="Maximum token response ceiling."

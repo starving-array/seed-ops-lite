@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 class TokenUsage(BaseModel):
     """Pydantic model representing token accounting metrics for LLM executions."""
 
-    model: str = Field(description="The model name used (e.g. gpt-4o, gemini-1.5-pro)")
+    model: str = Field(
+        description="The model name used (e.g. gpt-4o, gemini-2.5-flash)"
+    )
     provider: str = Field(
         description="The API provider name (e.g. OpenAI, Google, Anthropic)"
     )

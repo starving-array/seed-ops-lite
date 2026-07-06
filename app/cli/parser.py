@@ -165,7 +165,6 @@ def args_to_request(args: argparse.Namespace) -> CLIRequest:
     ddl_content = None
     ddl_path = getattr(args, "ddl", None)
     if ddl_path:
-
         from pathlib import Path
 
         path_obj = Path(ddl_path)

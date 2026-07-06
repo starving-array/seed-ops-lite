@@ -77,9 +77,21 @@ class SQLiteProjectRepository(ProjectRepository):
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    async def create_project(self, project_id: str, name: str) -> dict[str, Any]:
+    async def create_project(
+        self,
+        project_id: str,
+        name: str,
+        description: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
         try:
-            project = Project(id=project_id, name=name, version=1)
+            project = Project(
+                id=project_id,
+                name=name,
+                description=description,
+                status=status or "pending",
+                version=1,
+            )
             self.session.add(project)
             self.session.flush()
             DomainEventDispatcher.dispatch(
@@ -88,6 +100,9 @@ class SQLiteProjectRepository(ProjectRepository):
             return {
                 "id": project.id,
                 "name": project.name,
+                "description": project.description or "",
+                "status": project.status or "pending",
+                "tables": 0,
                 "version": project.version,
                 "created_at": project.created_at,
                 "updated_at": project.updated_at,
@@ -102,13 +117,61 @@ class SQLiteProjectRepository(ProjectRepository):
             ).scalar_one_or_none()
             if not project:
                 return None
+            active_schema = self.session.execute(
+                select(Schema).where(
+                    Schema.project_id == project.id, Schema.is_active == 1
+                )
+            ).scalar_one_or_none()
+            tables_count = 0
+            if active_schema:
+                try:
+                    tables_data = json.loads(active_schema.tables_json)
+                    tables_count = len(tables_data)
+                except Exception:  # noqa: S110
+                    pass
             return {
                 "id": project.id,
                 "name": project.name,
+                "description": project.description or "",
+                "status": project.status or "pending",
+                "tables": tables_count,
                 "version": project.version,
                 "created_at": project.created_at,
                 "updated_at": project.updated_at,
             }
+        except Exception as e:
+            raise map_persistence_exception(e) from e
+
+    async def list_projects(self) -> list[dict[str, Any]]:
+        try:
+            projects = self.session.execute(select(Project)).scalars().all()
+            res = []
+            for p in projects:
+                active_schema = self.session.execute(
+                    select(Schema).where(
+                        Schema.project_id == p.id, Schema.is_active == 1
+                    )
+                ).scalar_one_or_none()
+                tables_count = 0
+                if active_schema:
+                    try:
+                        tables_data = json.loads(active_schema.tables_json)
+                        tables_count = len(tables_data)
+                    except Exception:  # noqa: S110
+                        pass
+                res.append(
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "description": p.description or "",
+                        "status": p.status or "pending",
+                        "tables": tables_count,
+                        "version": p.version,
+                        "created_at": p.created_at,
+                        "updated_at": p.updated_at,
+                    }
+                )
+            return res
         except Exception as e:
             raise map_persistence_exception(e) from e
 
@@ -744,15 +807,27 @@ class SQLitePersistenceProvider(PersistenceProvider):
     def unit_of_work(self) -> UnitOfWork:
         return SQLiteUnitOfWork()
 
-    async def create_project(self, project_id: str, name: str) -> dict[str, Any]:
+    async def create_project(
+        self,
+        project_id: str,
+        name: str,
+        description: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
         async with self.unit_of_work() as uow:
-            res = await uow.projects.create_project(project_id, name)
+            res = await uow.projects.create_project(
+                project_id, name, description, status
+            )
             await uow.commit()
             return res
 
     async def get_project(self, project_id: str) -> dict[str, Any] | None:
         async with self.unit_of_work() as uow:
             return await uow.projects.get_project(project_id)
+
+    async def list_projects(self) -> list[dict[str, Any]]:
+        async with self.unit_of_work() as uow:
+            return await uow.projects.list_projects()
 
     async def save_schema(
         self, project_id: str, version: int, tables: list[Any], relationships: list[Any]

@@ -18,7 +18,7 @@ class PromptMetadata(BaseModel):
         default=None, description="Target LLM provider (e.g. 'Google', 'OpenAI')."
     )
     model: str | None = Field(
-        default=None, description="Target LLM model string (e.g. 'gemini-1.5-pro')."
+        default=None, description="Target LLM model string (e.g. 'gemini-2.5-flash')."
     )
     temperature: float | None = Field(
         default=0.0, description="Recommended sampling temperature."

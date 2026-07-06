@@ -1,7 +1,9 @@
 import contextlib
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 
 from app.api.deps import get_runtime_provider
 from app.api.endpoints.schema.generation import cancel_generation
@@ -11,6 +13,15 @@ from app.api.endpoints.schema.helpers import (
 )
 from app.platform.container import get_persistence_provider
 from app.platform.persistence.interfaces import PersistenceProvider
+from app.platform.providers.sqlite_db import sqlite_db_manager
+from app.platform.providers.sqlite_models import (
+    DatasetMetadata,
+    ExportHistory,
+    Job,
+    Project,
+    Schema,
+    ValidationHistory,
+)
 from app.schemas.schema_design import JobModel
 
 router = APIRouter()
@@ -103,3 +114,46 @@ async def cancel_job_from_history(
 ) -> dict[str, str]:
     """Cancels a running job directly from the history view."""
     return await cancel_generation(workflow_id=job_id, db=db, persistence=persistence)
+
+
+@router.get("/stats")
+async def get_dashboard_stats() -> dict[str, Any]:
+    """Retrieve database count statistics for the dashboard dashboard panels."""
+    try:
+        with sqlite_db_manager.session() as s:
+            total_projects = s.query(func.count(Project.id)).scalar() or 0
+            total_schemas = s.query(func.count(Schema.id)).scalar() or 0
+            total_jobs = s.query(func.count(Job.id)).scalar() or 0
+            total_exports = s.query(func.count(ExportHistory.id)).scalar() or 0
+            total_validations = s.query(func.count(ValidationHistory.id)).scalar() or 0
+            total_rows = s.query(func.sum(DatasetMetadata.total_rows)).scalar() or 0
+
+            # Validation stats breakdown
+            passed_validations = (
+                s.query(func.count(ValidationHistory.id))
+                .filter(ValidationHistory.result_status == "passed")
+                .scalar()
+                or 0
+            )
+            failed_validations = (
+                s.query(func.count(ValidationHistory.id))
+                .filter(ValidationHistory.result_status == "failed")
+                .scalar()
+                or 0
+            )
+
+            return {
+                "projects": total_projects,
+                "schemas": total_schemas,
+                "rows_generated": total_rows,
+                "exports": total_exports,
+                "jobs": total_jobs,
+                "validations": total_validations,
+                "passed_validations": passed_validations,
+                "failed_validations": failed_validations,
+            }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch stats: {exc}",
+        ) from exc

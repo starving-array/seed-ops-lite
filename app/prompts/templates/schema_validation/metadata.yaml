@@ -3,7 +3,7 @@ version: 1.0.0
 description: Validates SQL schema design layout for safety and completeness
 owner: airlock
 provider: Google
-model: gemini-1.5-pro
+model: null
 temperature: 0.1
 max_output_tokens: 1024
 expected_response: JSON analysis report containing status and errors array

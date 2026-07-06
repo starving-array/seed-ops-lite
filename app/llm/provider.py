@@ -60,8 +60,11 @@ class GeminiProvider(LLMProvider):
         Returns:
             LLMResponse: Structured response with telemetry stats.
         """
-        model = request.model or settings.GEMINI_MODEL
-        api_key = settings.GEMINI_API_KEY
+        from app.llm.config_resolver import resolve_llm_config
+
+        llm_config = resolve_llm_config()
+        model = request.model or llm_config["model"]
+        api_key = llm_config["api_key"]
 
         if not api_key:
             raise LLMConfigurationError("Gemini API key is not configured.")
