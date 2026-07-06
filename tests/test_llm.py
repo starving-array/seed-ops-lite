@@ -100,7 +100,10 @@ async def test_gemini_provider_token_fallback() -> None:
 async def test_gemini_provider_missing_key() -> None:
     """Test configuration exception raised when API key is missing."""
     request = LLMRequest(prompt="Test prompt")
-    with patch.object(settings, "GEMINI_API_KEY", None):
+    with (
+        patch.object(settings, "GEMINI_API_KEY", None),
+        patch.object(settings, "GOOGLE_API_KEY", None),
+    ):
         provider = GeminiProvider()
         with pytest.raises(LLMConfigurationError):
             await provider.generate(request)
@@ -267,7 +270,7 @@ async def test_gateway_accepts_rendered_prompt() -> None:
         template_version="1.0.0",
         prompt_hash="dummy-hash-1234567890abcdef",
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         temperature=0.2,
         max_output_tokens=1000,
         timeout_seconds=45.0,
@@ -286,7 +289,7 @@ async def test_gateway_accepts_rendered_prompt() -> None:
     mock_response.usage.completion_tokens = 10
     mock_response.usage.total_tokens = 15
     mock_response.usage.estimated_cost = 0.0001
-    mock_response.usage.model = "gemini-1.5-pro"
+    mock_response.usage.model = "gemini-2.5-flash"
     mock_response.usage.provider = "Google"
 
     mock_provider.generate.return_value = mock_response
@@ -302,7 +305,7 @@ async def test_gateway_accepts_rendered_prompt() -> None:
 
         assert request_arg.prompt == "SELECT 1;"
         assert request_arg.system_instruction == "You are a SQL validator."
-        assert request_arg.model == "gemini-1.5-pro"
+        assert request_arg.model == "gemini-2.5-flash"
         assert request_arg.temperature == 0.2
         assert request_arg.max_tokens == 1000
         # expected_response contains JSON, so json_mode should be True

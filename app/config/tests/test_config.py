@@ -75,7 +75,7 @@ def test_env_variables_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.app.app_name == "EnvAppName"
     assert config.redis.redis_port == 1234
     assert config.app.app_debug is False
-    assert config.llm.gemini_api_key == "secret_key"
+    assert config.GEMINI_API_KEY is None
 
 
 def test_schema_and_range_validations() -> None:
@@ -119,7 +119,7 @@ def test_backward_compatibility_settings_sync() -> None:
     manager = ConfigurationManager()
     overrides = {
         "app": {"app_name": "LegacySyncApp", "app_env": "testing"},
-        "llm": {"gemini_model": "test-gemini-model", "max_retries": 10},
+        "llm": {"model": "test-gemini-model", "max_retries": 10},
     }
 
     # Load new config and verify global Pydantic Settings object synchronizes

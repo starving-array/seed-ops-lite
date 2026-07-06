@@ -15,11 +15,15 @@ from app.main import create_app
 @pytest.fixture(scope="session", autouse=True)
 def override_test_platform_settings() -> None:
     """Override platform settings with test-friendly values to prevent .env contamination."""
+    from app.core.settings.config import settings
     from app.platform.configuration.settings import platform_settings
 
     platform_settings.RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 1
     platform_settings.RUNTIME_CIRCUIT_BREAKER_RECOVERY_SECONDS = 0.0
     platform_settings.RUNTIME_RECOVERY_POLL_INTERVAL_SECONDS = 0.05
+
+    settings.GEMINI_API_KEY = "mock-key-for-testing"
+    settings.GOOGLE_API_KEY = "mock-key-for-testing"
 
 
 @pytest.fixture(autouse=True)

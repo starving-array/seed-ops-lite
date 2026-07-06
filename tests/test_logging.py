@@ -496,7 +496,7 @@ class TestLLMObservabilityLogger:
             log_llm_observation(
                 success=True,
                 provider="Google",
-                model="gemini-1.5-pro",
+                model="gemini-2.5-flash",
                 prompt_tokens=100,
                 completion_tokens=200,
                 total_tokens=300,

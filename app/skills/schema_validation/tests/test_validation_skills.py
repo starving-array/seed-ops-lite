@@ -62,7 +62,7 @@ async def test_structure_skill_success() -> None:
 
     usage = TokenUsage(
         provider="Google",
-        model="gemini-1.5-pro",
+        model="gemini-2.5-flash",
         latency_ms=100.0,
         prompt_tokens=5,
         completion_tokens=5,
@@ -103,7 +103,7 @@ async def test_relationships_skill_success() -> None:
     gateway = LLMGateway()
     mock_provider = AsyncMock()
 
-    usage = TokenUsage(provider="Google", model="gemini-1.5-pro", latency_ms=100.0)
+    usage = TokenUsage(provider="Google", model="gemini-2.5-flash", latency_ms=100.0)
     mock_response = LLMResponse(
         text='{"is_valid": false, "fk_count": 1, "observations": [], "findings": [{"severity": "high", "description": "loop detected", "suggestion": "break loop"}]}',
         usage=usage,
@@ -135,7 +135,7 @@ async def test_naming_skill_success() -> None:
     gateway = LLMGateway()
     mock_provider = AsyncMock()
 
-    usage = TokenUsage(provider="Google", model="gemini-1.5-pro", latency_ms=100.0)
+    usage = TokenUsage(provider="Google", model="gemini-2.5-flash", latency_ms=100.0)
     mock_response = LLMResponse(
         text='{"is_valid": true, "observations": ["No violations"], "findings": []}',
         usage=usage,
@@ -164,7 +164,7 @@ async def test_data_quality_skill_success() -> None:
     gateway = LLMGateway()
     mock_provider = AsyncMock()
 
-    usage = TokenUsage(provider="Google", model="gemini-1.5-pro", latency_ms=100.0)
+    usage = TokenUsage(provider="Google", model="gemini-2.5-flash", latency_ms=100.0)
     mock_response = LLMResponse(
         text='{"is_valid": true, "observations": [], "findings": []}',
         usage=usage,
@@ -192,7 +192,7 @@ async def test_best_practices_skill_success() -> None:
     gateway = LLMGateway()
     mock_provider = AsyncMock()
 
-    usage = TokenUsage(provider="Google", model="gemini-1.5-pro", latency_ms=100.0)
+    usage = TokenUsage(provider="Google", model="gemini-2.5-flash", latency_ms=100.0)
     mock_response = LLMResponse(
         text='{"is_valid": true, "observations": ["Good layout"], "findings": []}',
         usage=usage,
