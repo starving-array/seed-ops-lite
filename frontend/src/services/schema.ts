@@ -194,6 +194,7 @@ export interface AIAssistantReport {
   suggestions: AISuggestion[]
   executionDurationMs: number
   result?: AIAssistantReport
+  diagnostics?: LLMDiagnostics | null
   sessionDiagnostics?: LLMSessionDiagnostics | null
   skills?: LLMDiagnostics[] | null
   workflowStatus?: string | null

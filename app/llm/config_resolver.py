@@ -114,8 +114,8 @@ def resolve_llm_config() -> dict[str, Any]:
             settings, "GEMINI_API_KEY", None
         )
     elif provider == "vertex":
-        # Vertex uses ADC or GCP variables
-        api_key = getattr(settings, "GOOGLE_CLOUD_PROJECT", None)
+        # Vertex does not use API key, it uses ADC
+        api_key = None
     elif provider == "openai":
         api_key = getattr(settings, "OPENAI_API_KEY", None)
     elif provider == "anthropic":
@@ -133,6 +133,8 @@ def resolve_llm_config() -> dict[str, Any]:
         "timeout": timeout,
         "max_retries": max_retries,
         "api_key": api_key,
+        "google_cloud_project": getattr(settings, "GOOGLE_CLOUD_PROJECT", None),
+        "google_cloud_location": getattr(settings, "GOOGLE_CLOUD_LOCATION", None),
         "enabled": enabled,
         "auto_failover": auto_failover,
         "fallback_order": fallback_order_list,
@@ -141,7 +143,9 @@ def resolve_llm_config() -> dict[str, Any]:
 
 def validate_llm_config(config: dict[str, Any]) -> None:
     """Validate LLM config parameters using provider registry."""
-    provider = str(config.get("provider") or "google")
+    provider = str(config.get("provider") or "google").strip().lower()
+    if provider == "gemini":
+        provider = "google"
     from app.llm.provider import provider_registry
 
     try:
@@ -155,11 +159,52 @@ def validate_llm_config(config: dict[str, Any]) -> None:
     is_testing = (
         getattr(settings, "APP_ENV", "development") == "testing"
         or "pytest" in sys.modules
-    )
-    if not is_testing and not config.get("api_key"):
-        raise LLMConfigurationError(
-            f"Credentials/keys not configured for provider: {provider}"
-        )
+    ) and not config.get("force_validation")
+    if not is_testing:
+        valid = True
+        if provider == "openai":
+            key = config.get("api_key") or getattr(settings, "OPENAI_API_KEY", None)
+            if not key:
+                valid = False
+        elif provider == "anthropic":
+            key = config.get("api_key") or getattr(settings, "ANTHROPIC_API_KEY", None)
+            if not key:
+                valid = False
+        elif provider in ("google", "gemini"):
+            key = (
+                config.get("api_key")
+                or getattr(settings, "GOOGLE_API_KEY", None)
+                or getattr(settings, "GEMINI_API_KEY", None)
+            )
+            if not key:
+                valid = False
+        elif provider == "azure":
+            key = config.get("api_key") or getattr(
+                settings, "AZURE_OPENAI_API_KEY", None
+            )
+            endpoint = config.get("azure_endpoint") or getattr(
+                settings, "AZURE_OPENAI_ENDPOINT", None
+            )
+            if not key or not endpoint:
+                valid = False
+        elif provider == "vertex":
+            proj = config.get("google_cloud_project") or getattr(
+                settings, "GOOGLE_CLOUD_PROJECT", None
+            )
+            loc = config.get("google_cloud_location") or getattr(
+                settings, "GOOGLE_CLOUD_LOCATION", None
+            )
+            if not proj or not loc:
+                valid = False
+        elif provider == "ollama":
+            pass
+        elif not config.get("api_key"):
+            valid = False
+
+        if not valid:
+            raise LLMConfigurationError(
+                f"Credentials/keys not configured for provider: {provider}"
+            )
 
     if not config.get("model"):
         raise LLMConfigurationError(

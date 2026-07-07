@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     GOOGLE_ENABLED: bool = Field(default=True)
     GOOGLE_API_KEY: str | None = Field(default=None)
     GOOGLE_MODEL: str = Field(default="gemini-2.5-flash")
+    GOOGLE_CLOUD_PROJECT: str | None = Field(default=None)
+    GOOGLE_CLOUD_LOCATION: str | None = Field(default=None)
 
     # OpenAI Provider
     OPENAI_ENABLED: bool = Field(default=False)

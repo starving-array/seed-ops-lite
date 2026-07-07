@@ -521,12 +521,35 @@ async def ai_schema_assistant(schema: SchemaModel) -> AIAssistantDiagnosticsResp
             )
             skills_diagnostics = []
 
+        diagnostics = None
+        if telemetry_list:
+            last_record = telemetry_list[-1]
+            last_usage = last_record.get("usage") or {}
+            diagnostics = LLMDiagnostics(
+                provider=last_record.get("provider", "Google"),
+                model=last_record.get("model", "unknown"),
+                latencyMs=last_record.get("latency_ms"),
+                attemptNumber=last_record.get("attempt_number"),
+                maxAttempts=last_record.get("max_attempts"),
+                retryCount=last_record.get("retry_count"),
+                finishReason=last_record.get("finish_reason"),
+                responseType=last_record.get("response_type"),
+                skillName=last_record.get("skill"),
+                status=last_record.get("status"),
+                usage=LLMDiagnosticUsage(
+                    promptTokens=last_usage.get("prompt_tokens"),
+                    completionTokens=last_usage.get("completion_tokens"),
+                    totalTokens=last_usage.get("total_tokens"),
+                ),
+            )
+
         return AIAssistantDiagnosticsResponse(
             status=result.status,
             summary=result.summary,
             suggestions=result.suggestions,
             executionDurationMs=result.execution_duration_ms,
             result=result,
+            diagnostics=diagnostics,
             sessionDiagnostics=session_diagnostics,
             skills=skills_diagnostics,
             workflowStatus=workflow_status,

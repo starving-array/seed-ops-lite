@@ -131,6 +131,7 @@ class LLMSessionDiagnostics(BaseModel):
 
 class AIAssistantDiagnosticsResponse(AIAssistantResponse):
     result: AIAssistantResponse | None = None
+    diagnostics: LLMDiagnostics | None = None
     session_diagnostics: LLMSessionDiagnostics | None = Field(
         default=None, alias="sessionDiagnostics"
     )

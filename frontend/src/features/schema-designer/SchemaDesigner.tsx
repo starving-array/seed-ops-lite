@@ -145,14 +145,15 @@ export const SchemaGenerator = () => {
 
       if (response.success && response.data) {
         const isSuccess = response.data.status === 'Completed'
-        const diag = response.data.sessionDiagnostics
+        const sessionDiag = response.data.sessionDiagnostics
+        const lastDiag = response.data.diagnostics
         const skills = response.data.skills
 
         setSessionStats(prev => {
-          const prompt = diag?.usage?.promptTokens ?? null
-          const completion = diag?.usage?.completionTokens ?? null
-          const total = diag?.usage?.totalTokens ?? null
-          const latency = diag?.totalLatencyMs ?? response.data?.executionDurationMs ?? 0
+          const prompt = sessionDiag?.usage?.promptTokens ?? null
+          const completion = sessionDiag?.usage?.completionTokens ?? null
+          const total = sessionDiag?.usage?.totalTokens ?? null
+          const latency = sessionDiag?.totalLatencyMs ?? response.data?.executionDurationMs ?? 0
 
           let nextPrompt = prev.totalPromptTokens
           if (prompt !== null) {
@@ -180,7 +181,7 @@ export const SchemaGenerator = () => {
           }
         })
 
-        setLastDiagnostics(diag || null)
+        setLastDiagnostics(lastDiag || null)
         setLastSkills(skills || null)
 
         if (isSuccess) {
@@ -1477,10 +1478,10 @@ export const SchemaGenerator = () => {
                 })()}
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">AI Status</span>
-                {lastDiagnostics?.aiStatus ? (
-                  <span className={`font-bold ${lastDiagnostics.aiStatus === 'SUCCESS' ? 'text-emerald-400' : lastDiagnostics.aiStatus === 'PARTIAL_SUCCESS' ? 'text-amber-400' : 'text-rose-400'}`}>
-                    {lastDiagnostics.aiStatus}
+                <span className="text-slate-400">Status</span>
+                {lastDiagnostics?.status ? (
+                  <span className={`font-bold ${lastDiagnostics.status === 'SUCCESS' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {lastDiagnostics.status}
                   </span>
                 ) : (
                   <span className="text-slate-500 italic">Unavailable</span>
@@ -1498,9 +1499,9 @@ export const SchemaGenerator = () => {
                 })()}
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Total Latency</span>
+                <span className="text-slate-400">Latency</span>
                 {(() => {
-                  const val = lastDiagnostics?.totalLatencyMs;
+                  const val = lastDiagnostics?.latencyMs;
                   return val === null || val === undefined ? (
                     <span className="text-slate-500 italic">Unavailable</span>
                   ) : (
@@ -1519,9 +1520,9 @@ export const SchemaGenerator = () => {
                 )}
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Total Retries</span>
+                <span className="text-slate-400">Retries</span>
                 {(() => {
-                  const val = lastDiagnostics?.totalRetries;
+                  const val = lastDiagnostics?.retryCount;
                   return val === null || val === undefined ? (
                     <span className="text-slate-500 italic">Unavailable</span>
                   ) : (

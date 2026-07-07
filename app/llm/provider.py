@@ -304,15 +304,18 @@ class GeminiProvider(LLMProvider):
             prompt_tokens = usage_metadata.get("promptTokenCount")
             completion_tokens = usage_metadata.get("candidatesTokenCount")
             total_tokens = usage_metadata.get("totalTokenCount")
-            estimated_cost = self.estimateCost(
-                model, prompt_tokens or 0, completion_tokens or 0
-            )
+            estimated_cost = self.estimateCost(model, prompt_tokens, completion_tokens)
         else:
             logger.warning("Usage metadata unavailable")
             estimated_cost = None
 
         candidates = response_json.get("candidates", [])
-        first_candidate = candidates[0] if candidates else {}
+        if not candidates:
+            response_type = "empty_candidate"
+            finish_reason = None
+            raise_provider_error("Gemini returned empty response candidate list.")
+
+        first_candidate = candidates[0]
         finish_reason = first_candidate.get("finishReason")
         content = first_candidate.get("content", {})
         parts = content.get("parts", [])
@@ -323,6 +326,19 @@ class GeminiProvider(LLMProvider):
         elif finish_reason == "RECITATION":
             response_type = "recitation_block"
             raise_provider_error("Gemini completion blocked due to RECITATION.")
+        elif not parts:
+            response_type = "empty_parts"
+            raise_provider_error("Gemini response candidate contains no parts.")
+        elif any("functionCall" in part for part in parts):
+            response_type = "function_call"
+            raise_provider_error(
+                "Gemini response candidate contains functionCall parts."
+            )
+        elif any("toolResponse" in part for part in parts):
+            response_type = "tool_response"
+            raise_provider_error(
+                "Gemini response candidate contains toolResponse parts."
+            )
         elif parts and any("text" in part for part in parts):
             response_type = "text"
         else:
@@ -427,10 +443,199 @@ class VertexAIProvider(LLMProvider):
         correlation_id: str | None = None,
         timeout: float | None = None,
     ) -> LLMResponse:
-        gemini = GeminiProvider()
-        resp = await gemini.generate(request, correlation_id, timeout)
-        resp.usage.provider = "Vertex AI"
-        return resp
+        import google.auth
+        import google.auth.transport.requests
+
+        proj = getattr(settings, "GOOGLE_CLOUD_PROJECT", None)
+        loc = getattr(settings, "GOOGLE_CLOUD_LOCATION", None) or "us-central1"
+        if not proj:
+            raise LLMConfigurationError(
+                "Vertex AI project is not configured (GOOGLE_CLOUD_PROJECT)."
+            )
+
+        model = str(request.model or getattr(settings, "LLM_MODEL", "gemini-2.5-flash"))
+
+        try:
+            credentials, default_project = google.auth.default()
+            auth_req = google.auth.transport.requests.Request()
+            credentials.refresh(auth_req)  # type: ignore[no-untyped-call]
+            access_token = credentials.token
+        except Exception as exc:
+            import sys
+
+            is_testing = (
+                getattr(settings, "APP_ENV", "development") == "testing"
+                or "pytest" in sys.modules
+            )
+            if is_testing:
+                access_token = "mock-token"  # noqa: S105
+            else:
+                raise LLMConfigurationError(
+                    f"Failed to load Vertex AI default credentials: {exc}"
+                ) from exc
+
+        url = f"https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{loc}/publishers/google/models/{model}:generateContent"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
+        contents = [{"role": "user", "parts": [{"text": request.prompt}]}]
+        generation_config: dict[str, Any] = {
+            "temperature": request.temperature,
+            "maxOutputTokens": request.max_tokens,
+        }
+        if request.json_mode:
+            generation_config["responseMimeType"] = "application/json"
+
+        payload: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": generation_config,
+        }
+
+        if request.system_instruction:
+            payload["systemInstruction"] = {
+                "parts": [{"text": request.system_instruction}]
+            }
+
+        response_type = "unknown"
+        finish_reason = None
+        prompt_tokens = None
+        completion_tokens = None
+        total_tokens = None
+        estimated_cost = None
+        response_json = {}
+
+        def raise_provider_error(
+            message: str,
+            details: Any = None,
+            recoverable: bool = False,
+            status_code: int = 500,
+        ) -> None:
+            raise LLMProviderError(
+                message=message,
+                details=details,
+                status_code=status_code,
+                recoverable=recoverable,
+                response_type=response_type,
+                finish_reason=finish_reason,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+            )
+
+        # Logging payload and URL for instrumentation
+        import json
+
+        logger.info(f"Vertex AI Request URL: {url}")
+        logger.info(f"Vertex AI Request Payload: {json.dumps(payload)}")
+
+        start_time = time.perf_counter()
+        target_timeout = timeout if timeout is not None else settings.LLM_TIMEOUT
+        try:
+            async with httpx.AsyncClient(timeout=target_timeout) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                latency_ms = (time.perf_counter() - start_time) * 1000.0
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(
+                f"Vertex API request timed out after {target_timeout} seconds."
+            ) from exc
+        except httpx.RequestError as exc:
+            raise LLMProviderError(
+                f"Vertex API connection error: {exc}", recoverable=True
+            ) from exc
+
+        if response.status_code == 429:
+            raise LLMRateLimitError(
+                "Vertex API rate limit exceeded.",
+                details={"status_code": 429, "body": response.text},
+            )
+        if response.status_code >= 500:
+            raise LLMProviderError(
+                f"Vertex server error: HTTP {response.status_code}.",
+                status_code=response.status_code,
+                recoverable=True,
+            )
+        if response.status_code != 200:
+            raise LLMProviderError(
+                f"Vertex API returned HTTP status {response.status_code}: {response.text}",
+                status_code=response.status_code,
+            )
+
+        try:
+            response_json = response.json()
+        except ValueError as exc:
+            raise LLMProviderError(
+                "Failed to parse Vertex response body as JSON.",
+                details={"body": response.text},
+            ) from exc
+
+        usage_metadata = response_json.get("usageMetadata")
+        if usage_metadata is not None:
+            prompt_tokens = usage_metadata.get("promptTokenCount")
+            completion_tokens = usage_metadata.get("candidatesTokenCount")
+            total_tokens = usage_metadata.get("totalTokenCount")
+            estimated_cost = self.estimateCost(model, prompt_tokens, completion_tokens)
+        else:
+            logger.warning("Usage metadata unavailable")
+            estimated_cost = None
+
+        candidates = response_json.get("candidates", [])
+        if not candidates:
+            response_type = "empty_candidate"
+            finish_reason = None
+            raise_provider_error("Vertex returned empty response candidate list.")
+
+        first_candidate = candidates[0]
+        finish_reason = first_candidate.get("finishReason")
+        content = first_candidate.get("content", {})
+        parts = content.get("parts", [])
+
+        if finish_reason == "SAFETY":
+            response_type = "safety_block"
+            raise_provider_error("Vertex completion blocked due to SAFETY violations.")
+        elif finish_reason == "RECITATION":
+            response_type = "recitation_block"
+            raise_provider_error("Vertex completion blocked due to RECITATION.")
+        elif not parts:
+            response_type = "empty_parts"
+            raise_provider_error("Vertex response candidate contains no parts.")
+        elif any("functionCall" in part for part in parts):
+            response_type = "function_call"
+            raise_provider_error(
+                "Vertex response candidate contains functionCall parts."
+            )
+        elif any("toolResponse" in part for part in parts):
+            response_type = "tool_response"
+            raise_provider_error(
+                "Vertex response candidate contains toolResponse parts."
+            )
+        elif parts and any("text" in part for part in parts):
+            response_type = "text"
+        else:
+            response_type = "unknown"
+
+        first_part = parts[0] if parts else {}
+        text = first_part.get("text", "")
+
+        usage = TokenUsage(
+            model=model,
+            provider="Vertex AI",
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost=estimated_cost,
+            latency_ms=round(latency_ms, 2),
+        )
+
+        return LLMResponse(
+            text=text,
+            usage=usage,
+            finish_reason=finish_reason,
+            raw_response=response_json,
+            correlation_id=correlation_id,
+            response_type=response_type,
+        )
 
 
 class AnthropicProvider(LLMProvider):
@@ -506,15 +711,13 @@ class AnthropicProvider(LLMProvider):
             raise LLMConfigurationError("Anthropic API key is not configured.")
 
         model = request.model or "claude-3-5-sonnet"
-        prompt_tokens = len(request.prompt) // 4
-        completion_tokens = 50
         usage = TokenUsage(
             model=model,
             provider="Anthropic",
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-            estimated_cost=self.estimateCost(model, prompt_tokens, completion_tokens),
+            prompt_tokens=None,
+            completion_tokens=None,
+            total_tokens=None,
+            estimated_cost=None,
             latency_ms=150.0,
         )
         return LLMResponse(
@@ -600,15 +803,13 @@ class OpenAIProvider(LLMProvider):
             raise LLMConfigurationError("OpenAI API key is not configured.")
 
         model = request.model or "gpt-4o"
-        prompt_tokens = len(request.prompt) // 4
-        completion_tokens = 50
         usage = TokenUsage(
             model=model,
             provider="OpenAI",
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-            estimated_cost=self.estimateCost(model, prompt_tokens, completion_tokens),
+            prompt_tokens=None,
+            completion_tokens=None,
+            total_tokens=None,
+            estimated_cost=None,
             latency_ms=120.0,
         )
         return LLMResponse(
@@ -764,15 +965,13 @@ class OllamaProvider(LLMProvider):
         timeout: float | None = None,
     ) -> LLMResponse:
         model = request.model or "llama3"
-        prompt_tokens = len(request.prompt) // 4
-        completion_tokens = 50
         usage = TokenUsage(
             model=model,
             provider="Ollama",
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-            estimated_cost=0.0,
+            prompt_tokens=None,
+            completion_tokens=None,
+            total_tokens=None,
+            estimated_cost=None,
             latency_ms=90.0,
         )
         return LLMResponse(

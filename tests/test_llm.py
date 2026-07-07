@@ -310,3 +310,128 @@ async def test_gateway_accepts_rendered_prompt() -> None:
 
         # Verify timeout was passed to provider.generate
         assert called_kwargs["timeout"] == 45.0
+
+
+@pytest.mark.asyncio
+async def test_vertex_provider_success() -> None:
+    """Test Vertex AI provider with ADC authentication."""
+    import google.auth.transport.requests  # noqa: F401
+
+    from app.llm.provider import VertexAIProvider
+
+    request = LLMRequest(
+        prompt="CREATE TABLE test (id INT);",
+        temperature=0.1,
+        max_tokens=100,
+        system_instruction="Analyze schema",
+    )
+
+    with (
+        patch("google.auth.default") as mock_auth_default,
+        patch("google.auth.transport.requests.Request"),
+        patch("httpx.AsyncClient.post") as mock_post,
+        patch.object(settings, "GOOGLE_CLOUD_PROJECT", "mock-project"),
+        patch.object(settings, "GOOGLE_CLOUD_LOCATION", "us-central1"),
+    ):
+        mock_credentials = MagicMock()
+        mock_credentials.token = "mock-adc-token"  # noqa: S105
+        mock_auth_default.return_value = (mock_credentials, "mock-project")
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "candidates": [
+                {
+                    "content": {"parts": [{"text": "Vertex analyzed successfully."}]},
+                    "finishReason": "STOP",
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 10,
+                "candidatesTokenCount": 20,
+                "totalTokenCount": 30,
+            },
+        }
+        mock_post.return_value = mock_response
+
+        provider = VertexAIProvider()
+        response = await provider.generate(request)
+
+        assert response.text == "Vertex analyzed successfully."
+        assert response.usage.provider == "Vertex AI"
+        assert response.usage.prompt_tokens == 10
+        assert response.usage.completion_tokens == 20
+        assert response.usage.total_tokens == 30
+        assert response.usage.estimated_cost is not None
+
+
+def test_vertex_validation_rules() -> None:
+    """Test validation rules for Vertex (requires project/location, no API key)."""
+    from app.llm.config_resolver import validate_llm_config
+
+    # 1. Vertex passes validation with GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION
+    config = {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash",
+        "google_cloud_project": "my-project",
+        "google_cloud_location": "us-central1",
+        "force_validation": True,
+    }
+    with patch.object(settings, "APP_ENV", "production"):
+        validate_llm_config(config)
+
+    # 2. Vertex fails when location is missing
+    config_missing_loc = {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash",
+        "google_cloud_project": "my-project",
+        "force_validation": True,
+    }
+    with (
+        patch.object(settings, "APP_ENV", "production"),
+        patch.object(settings, "GOOGLE_CLOUD_LOCATION", None),
+    ):
+        with pytest.raises(LLMConfigurationError) as exc_info:
+            validate_llm_config(config_missing_loc)
+        assert "Credentials/keys not configured for provider: vertex" in str(
+            exc_info.value
+        )
+
+    # 3. Vertex fails when project is missing
+    config_missing_proj = {
+        "provider": "vertex",
+        "model": "gemini-2.5-flash",
+        "google_cloud_location": "us-central1",
+        "force_validation": True,
+    }
+    with (
+        patch.object(settings, "APP_ENV", "production"),
+        patch.object(settings, "GOOGLE_CLOUD_PROJECT", None),
+    ):
+        with pytest.raises(LLMConfigurationError) as exc_info:
+            validate_llm_config(config_missing_proj)
+        assert "Credentials/keys not configured for provider: vertex" in str(
+            exc_info.value
+        )
+
+
+def test_google_requires_api_key() -> None:
+    """Test that Gemini/Google Developer API requires an API key in production."""
+    from app.llm.config_resolver import validate_llm_config
+
+    config = {
+        "provider": "google",
+        "model": "gemini-2.5-flash",
+        "force_validation": True,
+    }
+
+    with (
+        patch.object(settings, "APP_ENV", "production"),
+        patch.object(settings, "GOOGLE_API_KEY", None),
+        patch.object(settings, "GEMINI_API_KEY", None),
+    ):
+        with pytest.raises(LLMConfigurationError) as exc_info:
+            validate_llm_config(config)
+        assert "Credentials/keys not configured for provider: google" in str(
+            exc_info.value
+        )
