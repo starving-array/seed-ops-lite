@@ -1,7 +1,6 @@
 """Health check API endpoints."""
 
 import contextlib
-from typing import Any
 
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
@@ -408,19 +407,24 @@ async def health_check(response: Response) -> HealthResponse:
     # Resolve LLM config via the authoritative config_resolver (not legacy fields)
     import contextlib as _contextlib
 
-    _llm_cfg: dict[str, Any] = {}
+    _llm_cfg = {}
+    _llm_healthy = False
+    _llm_provider = "Google"
+    _llm_model = settings.GEMINI_MODEL
     with _contextlib.suppress(Exception):
         from app.llm.config_resolver import resolve_llm_config
+        from app.llm.provider import provider_registry
 
         _llm_cfg = resolve_llm_config()
+        _prov_name = _llm_cfg.get("provider") or "google"
+        _llm_provider = _prov_name.capitalize()
+        _llm_model = _llm_cfg.get("model") or settings.GEMINI_MODEL
 
-    _llm_api_key_set = bool(_llm_cfg.get("api_key"))
-    _llm_enabled = bool(_llm_cfg.get("enabled", False))
-    _llm_provider = (_llm_cfg.get("provider") or "google").capitalize()
-    _llm_model = _llm_cfg.get("model") or settings.GEMINI_MODEL
-    llm_gateway_status = (
-        "ready" if (_llm_api_key_set and _llm_enabled) else "api_key_missing"
-    )
+        _prov_inst = provider_registry.getProvider(_prov_name)
+        _llm_healthy = _prov_inst.is_available()
+
+    llm_gateway_status = "ready" if _llm_healthy else "api_key_missing"
+    _llm_api_key_set = _llm_healthy
 
     return HealthResponse(
         status=overall_status,
