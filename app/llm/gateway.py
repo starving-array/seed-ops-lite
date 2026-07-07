@@ -17,6 +17,7 @@ from app.llm.exceptions import LLMProviderError, LLMValidationError
 from app.llm.models import LLMRequest, LLMResponse
 from app.llm.provider import LLMProvider, provider_registry
 from app.llm.retry import execute_with_retry
+from app.llm.telemetry_persistence import persist_llm_telemetry
 from app.llm.validation import validate_response_text
 from app.prompts.models import RenderedPrompt
 from app.telemetry.events import EventID
@@ -284,6 +285,7 @@ class LLMGateway:
                     ),
                 }
                 ctx.llm_telemetry.append(telemetry_record)
+                persist_llm_telemetry(telemetry_record)
 
                 def val(v: Any) -> str:
                     if v is None:
@@ -360,6 +362,7 @@ class LLMGateway:
                     ),
                 }
                 ctx.llm_telemetry.append(telemetry_record)
+                persist_llm_telemetry(telemetry_record)
 
                 def val_fail(v: Any) -> str:
                     if v is None:

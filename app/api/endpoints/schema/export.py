@@ -255,9 +255,11 @@ async def list_exportable_datasets(
 ) -> list[dict[str, Any]]:
     """Lists completed generation jobs whose datasets are available for export.
 
-    SQLite is the authoritative source — no Redis dependency for job listing.
-    The RuntimeProvider is consulted only to fetch per-job row counts from
-    the generation status cache (ephemeral metadata).
+    Resolution order per job:
+    1. RuntimeProvider ephemeral cache (most current row counts, fast path).
+    2. SQLite DatasetMetadata (persistent — survives server restarts).
+
+    SQLite is always the authoritative source for job listing.
     """
     all_jobs = await db.list_jobs()
 
@@ -268,15 +270,43 @@ async def list_exportable_datasets(
             job_dict.get("type") == "generation"
             and job_dict.get("status") == "Completed"
         ):
-            # Try to get row count from RuntimeProvider generation status cache
+            # --- Step 1: Try RuntimeProvider ephemeral cache ---
             progress_list: list[Any] = []
             total_rows = 0
+            loaded = False
             with contextlib.suppress(Exception):
                 gen_bytes = await runtime.get(f"generation:{job_id}:status")
                 if gen_bytes:
                     gen_dict = json.loads(_safe_decode(gen_bytes))
-                    progress_list = gen_dict.get("progress", [])
-                    total_rows = gen_dict.get("totalRowsGenerated", 0)
+                    cache_progress = gen_dict.get("progress", [])
+                    if cache_progress:
+                        progress_list = cache_progress
+                        total_rows = gen_dict.get("totalRowsGenerated", 0)
+                        loaded = True
+
+            # --- Step 2: Fall back to SQLite DatasetMetadata ---
+            if not loaded:
+                with contextlib.suppress(Exception):
+                    meta_bytes = await db.get_metadata(job_id)
+                    if meta_bytes:
+                        sqlite_total = meta_bytes.get("total_rows", 0) or 0
+                        table_stats = meta_bytes.get("table_stats", {}) or {}
+                        total_rows = sqlite_total
+                        # Reconstruct progress list from table_stats dict
+                        for t_name, t_info in table_stats.items():
+                            row_count = (
+                                t_info.get("rowCount")
+                                or t_info.get("rows_generated")
+                                or 0
+                            )
+                            progress_list.append(
+                                {
+                                    "tableName": t_name,
+                                    "status": "Completed",
+                                    "rowsGenerated": row_count,
+                                    "targetRows": row_count,
+                                }
+                            )
 
             datasets.append(
                 {
