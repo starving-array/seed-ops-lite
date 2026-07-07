@@ -152,6 +152,18 @@ async def run_generation_background(
     generation_cancelled = False
 
     try:
+        from app.seeder.allocator import RecordAllocator
+        from app.seeder.fk_injector import ForeignKeyInjector
+        from app.seeder.math_computer import MathComputer
+        from app.seeder.pk_generator import PrimaryKeyGenerator
+        from app.seeder.relationship_allocator import RelationshipAllocator
+
+        # 1. Allocate Placeholders
+        placeholders = RecordAllocator.allocate(schema, ordered_tables, row_targets)
+
+        # 2. Allocate Relationships
+        relationship_map = RelationshipAllocator.allocate(schema, placeholders, seed)
+
         for t_name in ordered_tables:
             # Check for cancellation
             cancel_flag = await db_client.get(f"generation:{workflow_id}:cancel")
@@ -175,11 +187,31 @@ async def run_generation_background(
 
             target_rows = row_targets.get(t_name, 100)
 
-            # Reconstruct FieldDefinitions
+            # Reconstruct FieldDefinitions (Business fields ONLY)
             from app.cli.runner import map_column_to_field_def
 
             fields = {}
             for col in table_obj.columns:
+                # SKIP PKs and FKs for LLM generation
+                if col.is_primary_key:
+                    continue
+                is_fk = False
+                for rel in schema.relationships:
+                    if (
+                        rel.source_table_id == table_obj.id
+                        and rel.source_column_id == col.id
+                    ):
+                        is_fk = True
+                        break
+                    if (
+                        rel.target_table_id == table_obj.id
+                        and rel.target_column_id == col.id
+                    ):
+                        is_fk = True
+                        break
+                if is_fk:
+                    continue
+
                 fields[col.name] = map_column_to_field_def(
                     col.name, col.type, col.is_primary_key
                 )
@@ -225,9 +257,10 @@ async def run_generation_background(
                     estimated_cost_gen += stats.estimated_cost
                     latency_ms_gen += stats.latency_ms
 
-                all_records.setdefault(t_name, []).extend(
-                    [r.data for r in seed_res.records]
-                )
+                # Merge generated business fields into placeholders
+                for i, r in enumerate(seed_res.records):
+                    idx = rows_generated_for_table + i
+                    placeholders[t_name][idx].update(r.data)
 
                 rows_generated_for_table += batch_limit
                 total_rows_generated_acc += batch_limit
@@ -270,13 +303,34 @@ async def run_generation_background(
                 json.dumps(status_dict),
             )
 
-            # Write generated table records to Parquet using DiskDatasetStorageManager
+        if not generation_cancelled:
+            # 6. Generate PKs
+            PrimaryKeyGenerator.generate(schema, placeholders, seed or 1)
+
+            # 7. Inject FKs
+            ForeignKeyInjector.inject(schema, placeholders, relationship_map)
+
+            # 8. Compute Math
+            MathComputer.compute(schema, placeholders)
+
+            # 9. Assign all_records and Write Parquet
             from app.platform.container import get_dataset_storage_manager
 
             ds_manager = get_dataset_storage_manager()
-            await ds_manager.write_table_dataset(
-                workflow_id, t_name, all_records.get(t_name, [])
-            )
+
+            for t_name in ordered_tables:
+                # Remove internal _ref_id, _table, _index
+                clean_records = []
+                for placeholder_rec in placeholders[t_name]:
+                    clean_p = {
+                        k: v
+                        for k, v in placeholder_rec.items()
+                        if not k.startswith("_")
+                    }
+                    clean_records.append(clean_p)
+
+                all_records[t_name] = clean_records
+                await ds_manager.write_table_dataset(workflow_id, t_name, clean_records)
 
         if generation_cancelled:
             for t_name in ordered_tables:
