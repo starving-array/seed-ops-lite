@@ -404,7 +404,27 @@ async def health_check(response: Response) -> HealthResponse:
     except Exception:  # noqa: S110
         pass
 
-    llm_gateway_status = "ready" if settings.GEMINI_API_KEY else "api_key_missing"
+    # Resolve LLM config via the authoritative config_resolver (not legacy fields)
+    import contextlib as _contextlib
+
+    _llm_cfg = {}
+    _llm_healthy = False
+    _llm_provider = "Google"
+    _llm_model = settings.GEMINI_MODEL
+    with _contextlib.suppress(Exception):
+        from app.llm.config_resolver import resolve_llm_config
+        from app.llm.provider import provider_registry
+
+        _llm_cfg = resolve_llm_config()
+        _prov_name = _llm_cfg.get("provider") or "google"
+        _llm_provider = _prov_name.capitalize()
+        _llm_model = _llm_cfg.get("model") or settings.GEMINI_MODEL
+
+        _prov_inst = provider_registry.getProvider(_prov_name)
+        _llm_healthy = _prov_inst.is_available()
+
+    llm_gateway_status = "ready" if _llm_healthy else "api_key_missing"
+    _llm_api_key_set = _llm_healthy
 
     return HealthResponse(
         status=overall_status,
@@ -458,12 +478,12 @@ async def health_check(response: Response) -> HealthResponse:
         services=services,
         debug_mode=settings.APP_DEBUG,
         llm_status=LLMConfigStatus(
-            provider="Gemini",
-            model=settings.GEMINI_MODEL,
+            provider=_llm_provider,
+            model=_llm_model,
             gateway_status=llm_gateway_status,
             retry_count=settings.LLM_MAX_RETRIES,
             timeout=settings.LLM_TIMEOUT,
-            api_key_configured=bool(settings.GEMINI_API_KEY),
+            api_key_configured=_llm_api_key_set,
         ),
         repository_status=RepositoryStatus(
             git_branch=git_branch,

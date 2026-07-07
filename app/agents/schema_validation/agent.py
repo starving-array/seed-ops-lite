@@ -55,15 +55,22 @@ class SchemaValidationAgent:
             # 1. Create execution plan
             plan = self.planner.plan()
 
-            # 2. Run skills sequentially
-            skill_responses: dict[str, SkillResponse[Any]] = {}
-            for skill in plan:
+            import asyncio
+
+            # 2. Run skills concurrently
+            async def _execute_skill(
+                skill: Any,
+            ) -> tuple[str, SkillResponse[Any]]:
                 req = SkillRequest[SchemaValidationInput](
                     input_data=SchemaValidationInput(schema_ddl=schema_ddl),
                     context=ctx,
                 )
-                response = await SkillExecutor.execute(skill, req)
-                skill_responses[skill.name] = response
+                res = await SkillExecutor.execute(skill, req)
+                return skill.name, res
+
+            tasks = [_execute_skill(skill) for skill in plan]
+            results = await asyncio.gather(*tasks)
+            skill_responses: dict[str, SkillResponse[Any]] = dict(results)
 
             # 3. Compute total duration so far
             duration_ms = (time.perf_counter() - start_time) * 1000.0

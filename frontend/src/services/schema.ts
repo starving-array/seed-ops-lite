@@ -152,11 +152,54 @@ export interface AISuggestion {
   suggestedAction?: string
 }
 
+export interface LLMDiagnosticUsage {
+  promptTokens: number | null
+  completionTokens: number | null
+  totalTokens: number | null
+}
+
+export interface LLMSessionDiagnostics {
+  provider: string
+  model: string
+  totalLatencyMs: number | null
+  attemptNumber: number | null
+  maxAttempts: number | null
+  totalRetries: number | null
+  finishReason: string | null
+  responseType: string | null
+  usage: LLMDiagnosticUsage | null
+  aiStatus?: string | null
+}
+
+export interface LLMDiagnostics {
+  provider: string
+  model: string
+  latencyMs: number | null
+  attemptNumber: number | null
+  maxAttempts: number | null
+  retryCount: number | null
+  finishReason: string | null
+  responseType: string | null
+  usage: LLMDiagnosticUsage | null
+  skillName?: string | null
+  status?: string | null
+  providerErrorCode?: number | null
+  providerStatus?: string | null
+  providerMessage?: string | null
+}
+
 export interface AIAssistantReport {
   status: 'Completed' | 'Failed'
   summary: string
   suggestions: AISuggestion[]
   executionDurationMs: number
+  result?: AIAssistantReport
+  diagnostics?: LLMDiagnostics | null
+  sessionDiagnostics?: LLMSessionDiagnostics | null
+  skills?: LLMDiagnostics[] | null
+  workflowStatus?: string | null
+  aiStatus?: string | null
+  validationStatus?: string | null
 }
 
 export interface TableProgress {

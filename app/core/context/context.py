@@ -37,6 +37,10 @@ class ExecutionContext(BaseModel):
     request_start_time: float | None = Field(
         default=None, description="Timestamp recording when request processing started"
     )
+    llm_telemetry: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Telemetry logs of all LLM requests in the context",
+    )
 
 
 # Single ContextVar holding the current ExecutionContext state

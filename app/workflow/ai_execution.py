@@ -53,12 +53,14 @@ class ExecutionMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     duration: float = Field(..., description="Latency duration of the call in seconds.")
-    token_usage: dict[str, int] = Field(
+    token_usage: dict[str, int | None] = Field(
         default_factory=dict, description="Usage counts (prompt/completion/total)."
     )
     provider: str = Field(..., description="The name of the LLM provider.")
     model: str = Field(..., description="The target LLM model name used.")
-    cost: float = Field(default=0.0, description="Calculated usage cost in USD.")
+    cost: float | None = Field(
+        default=None, description="Calculated usage cost in USD."
+    )
 
 
 class ExecutionResponse(BaseModel):

@@ -417,12 +417,11 @@ async def get_schema_stats(
 ) -> dict[str, Any]:
     """Load stats/metrics for projects, schemas, generated rows, exports, jobs, and validation."""
     import contextlib
-    import json
-    import re
 
     from sqlalchemy import text
 
     from app.core.settings.config import settings
+    from app.llm.config_resolver import resolve_llm_config
     from app.platform.providers.sqlite_db import sqlite_db_manager
 
     projects_count = 0
@@ -444,7 +443,7 @@ async def get_schema_stats(
         # Schemas Count
         with contextlib.suppress(Exception):
             schemas_count = (
-                s.execute(text("SELECT count(*) FROM schema_versions")).scalar() or 0
+                s.execute(text("SELECT count(*) FROM schemas")).scalar() or 0
             )
 
         # Jobs Count
@@ -454,10 +453,7 @@ async def get_schema_stats(
         # Exports Count
         with contextlib.suppress(Exception):
             exports_count = (
-                s.execute(
-                    text("SELECT count(*) FROM jobs WHERE type = 'export'")
-                ).scalar()
-                or 0
+                s.execute(text("SELECT count(*) FROM export_history")).scalar() or 0
             )
 
         # Validation stats
@@ -468,7 +464,7 @@ async def get_schema_stats(
             validation_passed = (
                 s.execute(
                     text(
-                        "SELECT count(*) FROM validation_history WHERE status = 'Passed'"
+                        "SELECT count(*) FROM validation_history WHERE result_status = 'passed'"
                     )
                 ).scalar()
                 or 0
@@ -476,52 +472,74 @@ async def get_schema_stats(
             validation_failed = (
                 s.execute(
                     text(
-                        "SELECT count(*) FROM validation_history WHERE status = 'Failed'"
+                        "SELECT count(*) FROM validation_history WHERE result_status = 'failed'"
                     )
                 ).scalar()
                 or 0
             )
 
-        # Total generated rows
+        # Total generated rows — read from dataset_metadata (authoritative persistent store)
         with contextlib.suppress(Exception):
-            jobs_rows = s.execute(
+            total_generated_rows = (
+                s.execute(
+                    text("SELECT COALESCE(SUM(total_rows), 0) FROM dataset_metadata")
+                ).scalar()
+                or 0
+            )
+
+    # --- LLM Token Analytics from llm_telemetry ---
+    total_tokens = 0
+    input_tokens = 0
+    output_tokens = 0
+    estimated_cost_usd = 0.0
+    total_llm_requests = 0
+    active_provider = "Unknown"
+    active_model = settings.GEMINI_MODEL or "gemini-2.5-flash"
+
+    try:
+        with sqlite_db_manager.session() as s:
+            row = s.execute(
                 text(
-                    "SELECT result_summary, details FROM jobs WHERE status = 'Completed'"
+                    "SELECT "
+                    "  COALESCE(SUM(total_tokens), 0), "
+                    "  COALESCE(SUM(prompt_tokens), 0), "
+                    "  COALESCE(SUM(completion_tokens), 0), "
+                    "  COALESCE(SUM(estimated_cost), 0.0), "
+                    "  COUNT(*) "
+                    "FROM llm_telemetry WHERE status = 'success'"
                 )
-            ).all()
-            for r in jobs_rows:
-                summary = r[0] or ""
-                if "generated" in summary.lower():
-                    m = re.search(r"generated\s+(\d+)\s+rows", summary.lower())
-                    if m:
-                        total_generated_rows += int(m.group(1))
-                    else:
-                        m2 = re.search(r"(\d+)\s+rows", summary.lower())
-                        if m2:
-                            total_generated_rows += int(m2.group(1))
-                details_str = r[1]
-                if details_str:
-                    with contextlib.suppress(Exception):
-                        det = json.loads(details_str)
-                        if isinstance(det, dict):
-                            total_generated_rows += det.get("total_rows", 0) or det.get(
-                                "total_rows_generated", 0
-                            )
+            ).one()
+            total_tokens = int(row[0] or 0)
+            input_tokens = int(row[1] or 0)
+            output_tokens = int(row[2] or 0)
+            estimated_cost_usd = float(row[3] or 0.0)
+            total_llm_requests = int(row[4] or 0)
+    except Exception:  # noqa: S110
+        pass
+
+    with contextlib.suppress(Exception):
+        llm_cfg = resolve_llm_config()
+        active_provider = (llm_cfg.get("provider") or "google").capitalize()
+        active_model = llm_cfg.get("model") or active_model
+
+    tokens_per_job = (
+        round(total_tokens / total_llm_requests) if total_llm_requests > 0 else 0
+    )
 
     token_usage = {
-        "total_tokens": 142500,
-        "input_tokens": 82100,
-        "output_tokens": 60400,
-        "tokens_per_job": 1250,
-        "active_model": settings.GEMINI_MODEL or "gemini-1.5-flash",
-        "active_provider": "Google Gemini",
-        "estimated_cost_usd": 0.0125,
+        "total_tokens": total_tokens,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "tokens_per_job": tokens_per_job,
+        "active_model": active_model,
+        "active_provider": active_provider,
+        "estimated_cost_usd": round(estimated_cost_usd, 6),
     }
 
     return {
         "projects_count": projects_count,
         "schemas_count": schemas_count,
-        "total_generated_rows": total_generated_rows or 2500,
+        "total_generated_rows": total_generated_rows,
         "jobs_count": jobs_count,
         "exports_count": exports_count,
         "validation_statistics": {

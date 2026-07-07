@@ -51,12 +51,7 @@ export const Observability = () => (
   />
 )
 
-export const Settings = () => (
-  <PagePlaceholder
-    title="Settings"
-    description="Configure global application properties, API access keys, connection pools, and agent models."
-  />
-)
+export { default as Settings } from './features/settings/Settings'
 
 export const About = () => {
   return (

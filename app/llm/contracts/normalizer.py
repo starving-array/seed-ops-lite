@@ -97,10 +97,19 @@ class AIContractNormalizer:
         raw_details: dict[str, Any] = {}
         message = str(exc)
 
+        details = getattr(exc, "details", None) or {}
+        cause = getattr(exc, "__cause__", None)
+        if cause and not details:
+            details = getattr(cause, "details", None) or {}
+
         if isinstance(exc, AIContractValidationError):
             error_type = "validation"
             is_retryable = False
             raw_details = {"errors": exc.errors}
+        elif "errors" in details and details["errors"] is not None:
+            error_type = "validation"
+            is_retryable = False
+            raw_details = {"errors": details["errors"]}
         elif isinstance(exc, AIContractParsingError | LLMValidationError):
             error_type = "parsing"
             is_retryable = False
@@ -110,7 +119,7 @@ class AIContractNormalizer:
         elif isinstance(exc, LLMException):
             error_type = "provider"
             is_retryable = exc.recoverable
-            raw_details = getattr(exc, "details", {})
+            raw_details = getattr(exc, "details", {}) or {}
         elif isinstance(exc, asyncio.TimeoutError | ConnectionError | TimeoutError):
             error_type = "provider"
             is_retryable = True
@@ -201,17 +210,39 @@ class AIContractNormalizer:
         """
         response = None
         try:
+            validated_data_container: dict[str, Any] = {}
+
+            def validate_resp(resp: LLMResponse) -> None:
+                try:
+                    parsed_dict = parse_to_dict(resp.text)
+                    val_data = validate_schema(
+                        parsed_dict, contract_request.response_schema
+                    )
+                    validated_data_container["data"] = val_data
+                except Exception as ve:
+                    # Raise LLMValidationError to trigger gateway retry loop
+                    from app.llm.exceptions import LLMValidationError
+
+                    errors = getattr(ve, "errors", None)
+                    if errors and callable(errors):
+                        try:
+                            errors = errors()
+                        except Exception:
+                            errors = None
+                    details = {"errors": errors} if errors else None
+
+                    raise LLMValidationError(
+                        message=f"Contract structural validation failed: {ve}",
+                        details=details,
+                    ) from ve
+
             response = await gateway.generate(
-                contract_request.prompt, json_mode=contract_request.json_mode
+                contract_request.prompt,
+                json_mode=contract_request.json_mode,
+                validator_callback=validate_resp,
             )
 
-            # Parse to dict (deals with markdown wrappers, formatting and structure)
-            parsed_dict = parse_to_dict(response.text)
-
-            # Validate structural correctness
-            validated_data = validate_schema(
-                parsed_dict, contract_request.response_schema
-            )
+            validated_data = validated_data_container["data"]
 
             # Telemetry logging for success
             logger.info(
@@ -233,7 +264,13 @@ class AIContractNormalizer:
             # Classify custom exceptions or wrap existing provider/system errors
             wrapped_exc = exc
             if isinstance(exc, LLMValidationError):
-                wrapped_exc = AIContractParsingError(str(exc))
+                details = getattr(exc, "details", None) or {}
+                if "errors" in details and details["errors"] is not None:
+                    wrapped_exc = AIContractValidationError(
+                        str(exc), errors=details["errors"]
+                    )
+                else:
+                    wrapped_exc = AIContractParsingError(str(exc))
             elif isinstance(exc, LLMException):
                 wrapped_exc = AIContractProviderError(
                     str(exc), is_retryable=exc.recoverable

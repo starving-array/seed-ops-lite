@@ -1,14 +1,23 @@
 """Orchestration gateway coordinating provider execution, validation, cost estimation, and telemetry."""
 
+# ruff: noqa: B023
+
+import contextlib
+import inspect
 import time
+import typing
 import uuid
+from datetime import UTC
+from typing import Any
 
 from app.core.context.context import get_context
 from app.core.logging.logging import logger
 from app.llm.config_resolver import resolve_llm_config, validate_llm_config
+from app.llm.exceptions import LLMProviderError, LLMValidationError
 from app.llm.models import LLMRequest, LLMResponse
-from app.llm.provider import GeminiProvider, LLMProvider
+from app.llm.provider import LLMProvider, provider_registry
 from app.llm.retry import execute_with_retry
+from app.llm.telemetry_persistence import persist_llm_telemetry
 from app.llm.validation import validate_response_text
 from app.prompts.models import RenderedPrompt
 from app.telemetry.events import EventID
@@ -21,29 +30,21 @@ class LLMGateway:
         """Initialize the LLMGateway.
 
         Args:
-            provider: Concrete provider engine (defaults to GeminiProvider).
+            provider: Concrete provider engine (defaults to resolved provider).
         """
-        self._provider = provider or GeminiProvider()
+        # Kept as self._provider for test mocking backward compatibility
+        self._provider = provider
 
     async def generate(
         self,
         request: RenderedPrompt | LLMRequest,
         json_mode: bool | None = None,
+        validator_callback: "typing.Callable[[LLMResponse], None] | None" = None,
     ) -> LLMResponse:
         """Generate content from the configured language model.
 
         Tracks latency, counts tokens, handles retries, performs response checks,
-        and logs events.
-
-        Args:
-            request: Unified request options or pre-rendered prompt.
-            json_mode: Option override to force structured JSON response.
-
-        Returns:
-            LLMResponse: Structured response with metadata.
-
-        Raises:
-            Exception: Any validation or transient error if retries fail.
+        and logs events. Supports failover when LLM_AUTO_FAILOVER is enabled.
         """
         # Resolve configuration centrally
         llm_config = resolve_llm_config()
@@ -54,9 +55,13 @@ class LLMGateway:
         correlation_id = ctx.correlation_id or str(uuid.uuid4())
 
         configured_model = llm_config["model"]
-        configured_provider = llm_config["provider"].capitalize()
+        configured_provider = llm_config["provider"]
         configured_timeout = llm_config["timeout"]
         configured_retries = llm_config["max_retries"]
+        auto_failover = llm_config.get("auto_failover", True)
+        fallback_order = llm_config.get(
+            "fallback_order", ["vertex", "gemini", "anthropic", "openai", "ollama"]
+        )
 
         if isinstance(request, RenderedPrompt):
             prompt_text = request.prompt_text
@@ -73,7 +78,6 @@ class LLMGateway:
                 else llm_config["max_output_tokens"]
             )
 
-            # If json_mode is not explicitly specified, inspect expected_response or prompt
             resolved_json_mode = json_mode
             if resolved_json_mode is None:
                 resolved_json_mode = (
@@ -110,78 +114,291 @@ class LLMGateway:
             retry_count = configured_retries
             provider_name = configured_provider
 
-        start_time = time.perf_counter()
+        # Setup provider list to try:
+        # 1. Custom provider if supplied via gateway constructor
+        # 2. Configured provider
+        # 3. Fallbacks if failover is enabled
+        providers_to_try = []
+        if self._provider:
+            providers_to_try.append((provider_name, self._provider))
+            auto_failover = False
+        else:
+            try:
+                p_inst = provider_registry.getProvider(provider_name)
+                providers_to_try.append((provider_name, p_inst))
+            except Exception:
+                p_inst = provider_registry.getProvider("gemini")
+                providers_to_try.append(("gemini", p_inst))
 
-        # Log LLM Request
-        logger.info(
-            EventID.LLM_REQUEST,
-            "LLM API request dispatch initiated",
-            component="LLMGateway",
-            request_id=request_id,
-            correlation_id=correlation_id,
-            prompt_hash=prompt_hash,
-            template_name=template_name,
-            template_version=template_version,
-            provider=provider_name,
-            model=model,
-        )
+        if auto_failover:
+            for fallback in fallback_order:
+                if fallback != provider_name:
+                    with contextlib.suppress(Exception):
+                        p_inst = provider_registry.getProvider(fallback)
+                        providers_to_try.append((fallback, p_inst))
 
-        try:
-            # Wrapped provider invocation to run within the retry handler
-            async def call_provider() -> LLMResponse:
-                return await self._provider.generate(
-                    provider_request,
-                    correlation_id=correlation_id,
-                    timeout=timeout,
+        last_exception = None
+        attempt_number = 0
+        failover_count = 0
+
+        for current_prov_name, active_provider in providers_to_try:
+            if attempt_number > 0:
+                failover_count += 1
+                # Adjust model name for fallback provider default if model is not compatible
+                if current_prov_name == "openai":
+                    provider_request.model = "gpt-4o"
+                elif current_prov_name == "anthropic":
+                    provider_request.model = "claude-3-5-sonnet"
+                elif current_prov_name == "ollama":
+                    provider_request.model = "llama3"
+                elif current_prov_name in ("google", "gemini", "vertex"):
+                    provider_request.model = "gemini-2.5-flash"
+
+            from datetime import datetime
+
+            start_time_dt = datetime.now(UTC)
+            start_time_iso = start_time_dt.isoformat()
+            start_time = time.perf_counter()
+            attempt_tracker = {"count": 0}
+
+            logger.info(
+                EventID.LLM_REQUEST,
+                f"LLM API request dispatch initiated on provider: {current_prov_name}",
+                component="LLMGateway",
+                request_id=request_id,
+                correlation_id=correlation_id,
+                prompt_hash=prompt_hash,
+                template_name=template_name,
+                template_version=template_version,
+                provider=current_prov_name,
+                model=provider_request.model or model,
+            )
+
+            try:
+
+                async def call_provider() -> LLMResponse:
+                    attempt_tracker["count"] += 1
+                    resp = await active_provider.generate(
+                        provider_request,
+                        correlation_id=correlation_id,
+                        timeout=timeout,
+                    )
+                    # Check JSON validity inside retry loop
+                    try:
+                        validate_response_text(resp.text, resolved_json_mode)
+                        if validator_callback:
+                            validator_callback(resp)
+                    except Exception as eval_exc:
+                        is_last_attempt = attempt_tracker["count"] > retry_count
+                        if is_last_attempt and resolved_json_mode:
+                            try:
+                                from app.llm.validation import repair_json
+
+                                repaired_text = repair_json(resp.text)
+                                resp.text = repaired_text
+                                validate_response_text(resp.text, resolved_json_mode)
+                                if validator_callback:
+                                    validator_callback(resp)
+                                return resp
+                            except Exception as repair_exc:
+                                repair_details = getattr(
+                                    repair_exc, "details", None
+                                ) or {"error": str(repair_exc)}
+                                raise LLMValidationError(
+                                    message=f"Contract validation failed after repair: {repair_exc}",
+                                    details=repair_details,
+                                ) from repair_exc
+
+                        if not isinstance(eval_exc, LLMValidationError):
+                            eval_exc = LLMValidationError(
+                                message=f"Contract structural validation failed: {eval_exc}",
+                                details=getattr(eval_exc, "details", None)
+                                or {"error": str(eval_exc)},
+                            )
+                        raise eval_exc
+                    return resp
+
+                response = await execute_with_retry(
+                    call_provider, max_retries=retry_count
+                )
+                end_time_dt = datetime.now(UTC)
+                end_time_iso = end_time_dt.isoformat()
+                latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+                response.usage.latency_ms = round(latency_ms, 2)
+                response.request_id = request_id
+                response_type = getattr(response, "response_type", "text")
+
+                # Cost estimation check
+                estimated_cost = getattr(response.usage, "estimated_cost", None)
+                if estimated_cost is None:
+                    estimated_cost = active_provider.estimateCost(
+                        response.usage.model,
+                        response.usage.prompt_tokens or 0,
+                        response.usage.completion_tokens or 0,
+                    )
+                if inspect.iscoroutine(estimated_cost) or hasattr(
+                    estimated_cost, "_is_coroutine"
+                ):
+                    estimated_cost = 0.0
+                response.usage.estimated_cost = estimated_cost
+
+                # If provider returns no usage metadata: log warning
+                if response.usage.prompt_tokens is None:
+                    logger.warning(EventID.LOG_WARNING, "Usage metadata unavailable")
+
+                # Store telemetry record
+                telemetry_record = {
+                    "request_id": request_id,
+                    "correlation_id": correlation_id,
+                    "provider": current_prov_name,
+                    "model": response.usage.model,
+                    "skill_name": template_name or "N/A",
+                    "template_name": template_name,
+                    "template_version": template_version,
+                    "start_time": start_time_iso,
+                    "end_time": end_time_iso,
+                    "latency_ms": response.usage.latency_ms,
+                    "retry_count": attempt_tracker["count"] - 1,
+                    "finish_reason": response.finish_reason,
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                    "status": "SUCCESS",
+                    "error_message": None,
+                    # Backwards compatibility fields:
+                    "skill": template_name or "N/A",
+                    "response_type": response_type,
+                    "attempt_number": attempt_tracker["count"],
+                    "max_attempts": retry_count + 1,
+                    "failover_count": failover_count,
+                    "usage": {
+                        "prompt_tokens": response.usage.prompt_tokens,
+                        "completion_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens,
+                    },
+                    "estimated_cost": estimated_cost,
+                    "authentication_method": (
+                        "MockAuth"
+                        if inspect.iscoroutine(active_provider.auth_status())
+                        else active_provider.auth_status()
+                    ),
+                }
+                ctx.llm_telemetry.append(telemetry_record)
+                persist_llm_telemetry(telemetry_record)
+
+                def val(v: Any) -> str:
+                    if v is None:
+                        return "Unavailable"
+                    if inspect.iscoroutine(v):
+                        return "MockProvider"
+                    return str(v)
+
+                log_block = (
+                    f"\n==================================================\n"
+                    f"LLM REQUEST TELEMETRY\n"
+                    f"==================================================\n"
+                    f"Provider: {val(active_provider.name())}\n"
+                    f"Model: {val(response.usage.model)}\n"
+                    f"Skill: {val(template_name or 'N/A')}\n"
+                    f"Latency: {val(response.usage.latency_ms)} ms\n"
+                    f"Retry Count: {attempt_tracker['count'] - 1}\n"
+                    f"Prompt Tokens: {val(response.usage.prompt_tokens)}\n"
+                    f"Completion Tokens: {val(response.usage.completion_tokens)}\n"
+                    f"Total Tokens: {val(response.usage.total_tokens)}\n"
+                    f"Finish Reason: {val(response.finish_reason)}\n"
+                    f"Status: SUCCESS\n"
+                    f"=================================================="
+                )
+                logger.info(EventID.LLM_RESPONSE, log_block, component="LLMGateway")
+                return response
+
+            except Exception as exc:
+                end_time_dt = datetime.now(UTC)
+                end_time_iso = end_time_dt.isoformat()
+                latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+                prompt_tk = getattr(exc, "prompt_tokens", None)
+                completion_tk = getattr(exc, "completion_tokens", None)
+                total_tk = getattr(exc, "total_tokens", None)
+
+                if prompt_tk is None:
+                    logger.warning(EventID.LOG_WARNING, "Usage metadata unavailable")
+
+                telemetry_record = {
+                    "request_id": request_id,
+                    "correlation_id": correlation_id,
+                    "provider": current_prov_name,
+                    "model": provider_request.model or model,
+                    "skill_name": template_name or "N/A",
+                    "template_name": template_name,
+                    "template_version": template_version,
+                    "start_time": start_time_iso,
+                    "end_time": end_time_iso,
+                    "latency_ms": round(latency_ms, 2),
+                    "retry_count": attempt_tracker["count"] - 1,
+                    "finish_reason": getattr(exc, "finish_reason", None),
+                    "prompt_tokens": prompt_tk,
+                    "completion_tokens": completion_tk,
+                    "total_tokens": total_tk,
+                    "status": "FAILED",
+                    "error_message": str(exc),
+                    # Backwards compatibility fields:
+                    "skill": template_name or "N/A",
+                    "response_type": "unknown",
+                    "attempt_number": attempt_tracker["count"],
+                    "max_attempts": retry_count + 1,
+                    "failover_count": failover_count,
+                    "usage": {
+                        "prompt_tokens": prompt_tk,
+                        "completion_tokens": completion_tk,
+                        "total_tokens": total_tk,
+                    },
+                    "estimated_cost": 0.0,
+                    "authentication_method": (
+                        "MockAuth"
+                        if inspect.iscoroutine(active_provider.auth_status())
+                        else active_provider.auth_status()
+                    ),
+                }
+                ctx.llm_telemetry.append(telemetry_record)
+                persist_llm_telemetry(telemetry_record)
+
+                def val_fail(v: Any) -> str:
+                    if v is None:
+                        return "Unavailable"
+                    return str(v)
+
+                log_block_fail = (
+                    f"\n==================================================\n"
+                    f"LLM REQUEST FAILURE\n"
+                    f"==================================================\n"
+                    f"Provider: {current_prov_name}\n"
+                    f"Model: {provider_request.model or model}\n"
+                    f"Skill: {template_name or 'N/A'}\n"
+                    f"Latency: {round(latency_ms, 2)} ms\n"
+                    f"Retry Count: {attempt_tracker['count'] - 1}\n"
+                    f"Prompt Tokens: {val_fail(prompt_tk)}\n"
+                    f"Completion Tokens: {val_fail(completion_tk)}\n"
+                    f"Total Tokens: {val_fail(total_tk)}\n"
+                    f"Finish Reason: {val_fail(getattr(exc, 'finish_reason', None))}\n"
+                    f"Status: FAILED\n"
+                    f"Error: {exc!s}\n"
+                    f"=================================================="
+                )
+                logger.error(EventID.LLM_ERROR, log_block_fail, component="LLMGateway")
+
+                last_exception = exc
+                attempt_number += attempt_tracker["count"]
+
+                # Log failover attempt fail
+                logger.warning(
+                    EventID.LOG_WARNING,
+                    f"Provider {current_prov_name} failed. Attempting next fallback if available. Error: {exc}",
+                    component="LLMGateway",
                 )
 
-            # Execute provider call with retry backoff wrapper
-            response = await execute_with_retry(call_provider, max_retries=retry_count)
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-
-            # Backfill latency and request ID details
-            response.usage.latency_ms = round(latency_ms, 2)
-            response.request_id = request_id
-
-            # Validate generated text response
-            validate_response_text(response.text, resolved_json_mode)
-
-            # Log LLM Response success
-            logger.info(
-                EventID.LLM_RESPONSE,
-                "LLM API request succeeded",
-                component="LLMGateway",
-                request_id=request_id,
-                correlation_id=correlation_id,
-                prompt_hash=prompt_hash,
-                template_name=template_name,
-                template_version=template_version,
-                provider=response.usage.provider,
-                model=response.usage.model,
-                latency_ms=response.usage.latency_ms,
-                prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens,
-                total_tokens=response.usage.total_tokens,
-                estimated_cost=response.usage.estimated_cost,
-            )
-
-            return response
-
-        except Exception as exc:
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-            # Log LLM Failure
-            logger.error(
-                EventID.LLM_ERROR,
-                f"LLM API request failed: {exc}",
-                component="LLMGateway",
-                request_id=request_id,
-                correlation_id=correlation_id,
-                prompt_hash=prompt_hash,
-                template_name=template_name,
-                template_version=template_version,
-                provider=provider_name,
-                model=model,
-                latency_ms=round(latency_ms, 2),
-                error=str(exc),
-            )
-            raise exc
+        # If all providers fail:
+        raise last_exception or LLMProviderError(
+            "All LLM providers failed to generate content."
+        )

@@ -1,7 +1,15 @@
 import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -260,3 +268,33 @@ class AppSetting(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+
+
+class LLMTelemetry(Base):
+    """Persistent telemetry record for every LLM gateway execution."""
+
+    __tablename__ = "llm_telemetry"
+    __table_args__ = (
+        Index("idx_llm_telemetry_provider", "provider"),
+        Index("idx_llm_telemetry_timestamp", "timestamp"),
+        Index("idx_llm_telemetry_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(50), index=True)
+    model: Mapped[str] = mapped_column(String(100))
+    operation: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    task_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    estimated_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="success")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

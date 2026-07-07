@@ -1,0 +1,119 @@
+"""Unit tests for PrimaryKeyGenerator."""
+
+from app.schemas.schema_design import ColumnModel, SchemaModel, TableModel
+from app.seeder.pk_generator import PrimaryKeyGenerator
+
+
+def test_pk_generation():
+    """Test deterministic generation of PKs (Integer, UUID, GUID, Auto Increment)."""
+    schema = SchemaModel(
+        tables=[
+            TableModel(
+                id="t1",
+                name="Users",
+                columns=[
+                    ColumnModel(
+                        id="c1",
+                        name="id",
+                        type="integer",
+                        isPrimaryKey=True,
+                        isNullable=False,
+                        defaultValue="",
+                    ),
+                    ColumnModel(
+                        id="c1b",
+                        name="email",
+                        type="string",
+                        isPrimaryKey=False,
+                        isNullable=False,
+                        defaultValue="",
+                    ),
+                ],
+            ),
+            TableModel(
+                id="t2",
+                name="Sessions",
+                columns=[
+                    ColumnModel(
+                        id="c2",
+                        name="session_id",
+                        type="uuid",
+                        isPrimaryKey=True,
+                        isNullable=False,
+                        defaultValue="",
+                    )
+                ],
+            ),
+            TableModel(
+                id="t3",
+                name="Tokens",
+                columns=[
+                    ColumnModel(
+                        id="c3",
+                        name="guid_id",
+                        type="guid",
+                        isPrimaryKey=True,
+                        isNullable=False,
+                        defaultValue="",
+                    )
+                ],
+            ),
+            TableModel(
+                id="t4",
+                name="Logs",
+                columns=[
+                    ColumnModel(
+                        id="c4",
+                        name="log_id",
+                        type="auto_increment",
+                        isPrimaryKey=True,
+                        isNullable=False,
+                        defaultValue="",
+                    )
+                ],
+            ),
+        ],
+        relationships=[],
+    )
+
+    placeholders = {
+        "Users": [
+            {"_ref_id": "u1", "id": None, "email": "test1@example.com"},
+            {"_ref_id": "u2", "id": None, "email": "test2@example.com"},
+        ],
+        "Sessions": [
+            {"_ref_id": "s1", "session_id": None},
+        ],
+        "Tokens": [
+            {"_ref_id": "t1", "guid_id": None},
+        ],
+        "Logs": [
+            {"_ref_id": "l1", "log_id": None},
+            {"_ref_id": "l2", "log_id": None},
+        ],
+    }
+
+    PrimaryKeyGenerator.generate(schema, placeholders, start_id=100)
+
+    # Integer check
+    assert placeholders["Users"][0]["id"] == 100
+    assert placeholders["Users"][1]["id"] == 101
+
+    # UUID check
+    sess_id = placeholders["Sessions"][0]["session_id"]
+    assert isinstance(sess_id, str)
+    assert len(sess_id) == 36
+
+    # GUID check
+    guid_id = placeholders["Tokens"][0]["guid_id"]
+    assert isinstance(guid_id, str)
+    assert len(guid_id) == 36
+
+    # Auto Increment check
+    assert placeholders["Logs"][0]["log_id"] == 100
+    assert placeholders["Logs"][1]["log_id"] == 101
+
+    # Deterministic check (run again and check equality)
+    placeholders_2 = {"Sessions": [{"_ref_id": "s1", "session_id": None}]}
+    PrimaryKeyGenerator.generate(schema, placeholders_2, start_id=100)
+    assert placeholders_2["Sessions"][0]["session_id"] == sess_id

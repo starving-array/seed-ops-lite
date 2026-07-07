@@ -110,6 +110,27 @@ export const SchemaGenerator = () => {
   const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
+  // AI Diagnostics & Session states
+  const [lastDiagnostics, setLastDiagnostics] = useState<any | null>(null)
+  const [lastSkills, setLastSkills] = useState<any[] | null>(null)
+  const [sessionStats, setSessionStats] = useState<{
+    totalCalls: number
+    successfulCalls: number
+    failedCalls: number
+    totalPromptTokens: number | null
+    totalCompletionTokens: number | null
+    totalTokens: number | null
+    totalLatency: number
+  }>({
+    totalCalls: 0,
+    successfulCalls: 0,
+    failedCalls: 0,
+    totalPromptTokens: null,
+    totalCompletionTokens: null,
+    totalTokens: null,
+    totalLatency: 0,
+  })
+
   const handleAIAnalysis = async () => {
     setAiStatus('analyzing')
     setAiErrorMessage('')
@@ -123,7 +144,47 @@ export const SchemaGenerator = () => {
       })
 
       if (response.success && response.data) {
-        if (response.data.status === 'Completed') {
+        const isSuccess = response.data.status === 'Completed'
+        const sessionDiag = response.data.sessionDiagnostics
+        const lastDiag = response.data.diagnostics
+        const skills = response.data.skills
+
+        setSessionStats(prev => {
+          const prompt = sessionDiag?.usage?.promptTokens ?? null
+          const completion = sessionDiag?.usage?.completionTokens ?? null
+          const total = sessionDiag?.usage?.totalTokens ?? null
+          const latency = sessionDiag?.totalLatencyMs ?? response.data?.executionDurationMs ?? 0
+
+          let nextPrompt = prev.totalPromptTokens
+          if (prompt !== null) {
+            nextPrompt = (nextPrompt ?? 0) + prompt
+          }
+
+          let nextCompletion = prev.totalCompletionTokens
+          if (completion !== null) {
+            nextCompletion = (nextCompletion ?? 0) + completion
+          }
+
+          let nextTotal = prev.totalTokens
+          if (total !== null) {
+            nextTotal = (nextTotal ?? 0) + total
+          }
+
+          return {
+            totalCalls: prev.totalCalls + 1,
+            successfulCalls: prev.successfulCalls + (isSuccess ? 1 : 0),
+            failedCalls: prev.failedCalls + (isSuccess ? 0 : 1),
+            totalPromptTokens: nextPrompt,
+            totalCompletionTokens: nextCompletion,
+            totalTokens: nextTotal,
+            totalLatency: prev.totalLatency + latency,
+          }
+        })
+
+        setLastDiagnostics(lastDiag || null)
+        setLastSkills(skills || null)
+
+        if (isSuccess) {
           setAiSuggestions(response.data.suggestions)
           setAiSummary(response.data.summary)
           setAiExecutionTime(response.data.executionDurationMs)
@@ -133,12 +194,28 @@ export const SchemaGenerator = () => {
           setAiStatus('failed')
         }
       } else {
-        setAiErrorMessage(response.error?.message || 'Failed to communicate with AI Assistant backend.')
+        const errorMsg = response.error?.message || 'Failed to communicate with AI Assistant backend.'
+        setAiErrorMessage(errorMsg)
         setAiStatus('failed')
+        setSessionStats(prev => ({
+          ...prev,
+          totalCalls: prev.totalCalls + 1,
+          failedCalls: prev.failedCalls + 1,
+        }))
+        setLastDiagnostics(null)
+        setLastSkills(null)
       }
     } catch (err: any) {
-      setAiErrorMessage(err.message || 'An unexpected error occurred during AI analysis.')
+      const errorMsg = err.message || 'An unexpected error occurred during AI analysis.'
+      setAiErrorMessage(errorMsg)
       setAiStatus('failed')
+      setSessionStats(prev => ({
+        ...prev,
+        totalCalls: prev.totalCalls + 1,
+        failedCalls: prev.failedCalls + 1,
+      }))
+      setLastDiagnostics(null)
+      setLastSkills(null)
     }
   }
 
@@ -1369,6 +1446,249 @@ export const SchemaGenerator = () => {
             <div className="text-[10px] text-slate-500 leading-relaxed">
               Multi-agent semantic validation runner will be integrated in Phase
               15.
+            </div>
+          </Card>
+
+          {/* AI Diagnostics Panel */}
+          <Card className="p-4 space-y-4 bg-slate-900/40 border-slate-800/80 text-left">
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-800/60">
+              <span>📊</span> AI Diagnostics
+            </h2>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Provider</span>
+                {(() => {
+                  const val = lastDiagnostics?.provider;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Model</span>
+                {(() => {
+                  const val = lastDiagnostics?.model;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Status</span>
+                {lastDiagnostics?.status ? (
+                  <span className={`font-bold ${lastDiagnostics.status === 'SUCCESS' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {lastDiagnostics.status}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 italic">Unavailable</span>
+                )}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Response Type</span>
+                {(() => {
+                  const val = lastDiagnostics?.responseType;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Latency</span>
+                {(() => {
+                  const val = lastDiagnostics?.latencyMs;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val} ms</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Attempt</span>
+                {lastDiagnostics?.attemptNumber && lastDiagnostics?.maxAttempts ? (
+                  <span className="text-slate-200 font-medium">
+                    {lastDiagnostics.attemptNumber} / {lastDiagnostics.maxAttempts}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 italic">Unavailable</span>
+                )}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Retries</span>
+                {(() => {
+                  const val = lastDiagnostics?.retryCount;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Prompt Tokens</span>
+                {(() => {
+                  const val = lastDiagnostics?.usage?.promptTokens;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Completion Tokens</span>
+                {(() => {
+                  const val = lastDiagnostics?.usage?.completionTokens;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Tokens</span>
+                {(() => {
+                  const val = lastDiagnostics?.usage?.totalTokens;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Finish Reason</span>
+                {(() => {
+                  const val = lastDiagnostics?.finishReason;
+                  return val === null || val === undefined ? (
+                    <span className="text-slate-500 italic">Unavailable</span>
+                  ) : (
+                    <span className="text-slate-200 font-medium">{val}</span>
+                  );
+                })()}
+              </div>
+            </div>
+          </Card>
+
+          {/* Individual Skill Diagnostics Panel */}
+          <Card className="p-4 space-y-4 bg-slate-900/40 border-slate-800/80 text-left">
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-800/60">
+              <span>🎯</span> Individual Skill Diagnostics
+            </h2>
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+              {lastSkills && lastSkills.length > 0 ? (
+                lastSkills.map((skill, idx) => (
+                  <div key={idx} className="p-3 rounded bg-slate-950/60 border border-slate-800/50 space-y-2 text-xs">
+                    <div className="flex justify-between items-center border-b border-slate-800/40 pb-1.5">
+                      <span className="font-bold text-slate-200 capitalize">
+                        {skill.skillName || 'Unknown Skill'}
+                      </span>
+                      <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                        skill.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        {skill.status || 'UNKNOWN'}
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Provider / Model</span>
+                        <span className="text-slate-350">{skill.provider} ({skill.model})</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Attempt / Retries</span>
+                        <span className="text-slate-350">
+                          {skill.attemptNumber !== null ? `${skill.attemptNumber} / ${skill.maxAttempts || 1}` : 'Unavailable'} ({skill.retryCount !== null ? `${skill.retryCount} retries` : 'Unavailable'})
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Latency / Response Type</span>
+                        <span className="text-slate-350">
+                          {skill.latencyMs !== null ? `${skill.latencyMs.toFixed(1)} ms` : 'Unavailable'} / {skill.responseType || 'Unavailable'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Prompt / Completion Tokens</span>
+                        <span className="text-slate-350">
+                          {skill.usage?.promptTokens !== null ? skill.usage?.promptTokens : 'Unavailable'} / {skill.usage?.completionTokens !== null ? skill.usage?.completionTokens : 'Unavailable'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Total Tokens / Finish Reason</span>
+                        <span className="text-slate-350 font-medium">
+                          {skill.usage?.totalTokens !== null ? skill.usage?.totalTokens : 'Unavailable'} ({skill.finishReason || 'Unavailable'})
+                        </span>
+                      </div>
+                      {skill.providerErrorCode !== null && skill.providerErrorCode !== undefined && (
+                        <div className="p-1.5 rounded bg-slate-900/60 border border-slate-800/40 text-[10px] space-y-1 mt-1 text-rose-300">
+                          <div className="font-semibold flex justify-between">
+                            <span>Provider Error Code:</span>
+                            <span>{skill.providerErrorCode}</span>
+                          </div>
+                          {skill.providerStatus && (
+                            <div className="flex justify-between">
+                              <span>Status:</span>
+                              <span className="font-mono">{skill.providerStatus}</span>
+                            </div>
+                          )}
+                          {skill.providerMessage && (
+                            <div className="mt-0.5 leading-relaxed text-slate-400 italic">
+                              "{skill.providerMessage}"
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-slate-500 text-center py-2 italic">
+                  Run AI suggest to view individual skill diagnostics.
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* AI Session Telemetry Summary Panel */}
+          <Card className="p-4 space-y-4 bg-slate-900/40 border-slate-800/80 text-left">
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-800/60">
+              <span>📈</span> Session Summary
+            </h2>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total AI Calls</span>
+                <span className="text-slate-200 font-medium">{sessionStats.totalCalls}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Successful Calls</span>
+                <span className="text-emerald-400 font-medium">{sessionStats.successfulCalls}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Failed Calls</span>
+                <span className="text-rose-400 font-medium">{sessionStats.failedCalls}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Prompt Tokens</span>
+                <span className="text-slate-200 font-medium">{sessionStats.totalPromptTokens || 'Unavailable'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Completion Tokens</span>
+                <span className="text-slate-200 font-medium">{sessionStats.totalCompletionTokens || 'Unavailable'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Tokens</span>
+                <span className="text-slate-200 font-medium">{sessionStats.totalTokens || 'Unavailable'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Latency</span>
+                <span className="text-slate-200 font-medium">{sessionStats.totalLatency.toFixed(1)} ms</span>
+              </div>
             </div>
           </Card>
         </div>

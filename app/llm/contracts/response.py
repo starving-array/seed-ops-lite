@@ -24,15 +24,19 @@ class ContractMetadata(BaseModel):
     prompt_version: str | None = Field(
         default=None, description="Prompt template version."
     )
-    latency_ms: float = Field(
-        default=0.0, description="Network and execution latency in milliseconds."
+    latency_ms: float | None = Field(
+        default=None, description="Network and execution latency in milliseconds."
     )
-    prompt_tokens: int = Field(default=0, description="Tokens in the prompt request.")
-    completion_tokens: int = Field(
-        default=0, description="Tokens in the generated response."
+    prompt_tokens: int | None = Field(
+        default=None, description="Tokens in the prompt request."
     )
-    total_tokens: int = Field(default=0, description="Total tokens consumed.")
-    estimated_cost: float = Field(default=0.0, description="Estimated cost in USD.")
+    completion_tokens: int | None = Field(
+        default=None, description="Tokens in the generated response."
+    )
+    total_tokens: int | None = Field(default=None, description="Total tokens consumed.")
+    estimated_cost: float | None = Field(
+        default=None, description="Estimated cost in USD."
+    )
     finish_reason: str | None = Field(
         default=None, description="Completion finish reason."
     )
