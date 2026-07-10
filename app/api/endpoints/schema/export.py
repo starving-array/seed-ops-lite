@@ -122,6 +122,11 @@ async def run_export_background(
         engine = ExportEngine()
         fmt = export_settings.format.lower()
 
+        import structlog
+
+        logger = structlog.get_logger()
+        logger.info("ExportDebug", raw_format=export_settings.format, lower_fmt=fmt)  # type: ignore[call-arg]
+
         options = {"indent": 2, "delimiter": ","}
 
         export_req = ExportRequest(

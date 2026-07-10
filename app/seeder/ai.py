@@ -130,6 +130,26 @@ class AIStrategy(BaseStrategy):
             if domain_context.get("terminologies"):
                 prompt_text += f"- Common Terminologies: {', '.join(domain_context['terminologies'])}\n"
 
+        column_guide = semantic_metadata.get("column_guide", {})
+        if column_guide:
+            prompt_text += "\nColumn Business Logic:\n"
+            for col_name, col_info in column_guide.items():
+                meaning = col_info.get("business_meaning", "")
+                prompt_text += f"- {col_name}: {meaning}"
+                deps = col_info.get("depends_on", [])
+                if deps:
+                    prompt_text += f" | depends on: {', '.join(deps)}"
+                formula = col_info.get("formula")
+                if formula:
+                    prompt_text += f" | formula: {formula}"
+                constraints = col_info.get("constraints", [])
+                if constraints:
+                    prompt_text += f" | constraints: {', '.join(constraints)}"
+                value_hint = col_info.get("value_range_hint")
+                if value_hint:
+                    prompt_text += f" | range: {value_hint}"
+                prompt_text += "\n"
+
         prompt_text += (
             f"\nPlease generate exactly {count} records, ensuring they are diverse, realistic, and coherent. "
             "Return the results in the requested JSON structure containing the 'records' key."

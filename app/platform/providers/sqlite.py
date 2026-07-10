@@ -18,6 +18,7 @@ from app.platform.persistence.exceptions import (
 from app.platform.persistence.interfaces import PersistenceProvider, UnitOfWork
 from app.platform.persistence.repositories import (
     AuditRepository,
+    ColumnBusinessLogicRepository,
     DatasetMetadataRepository,
     ExportRepository,
     IssueRepository,
@@ -31,6 +32,7 @@ from app.platform.providers.sqlite_db import sqlite_db_manager
 from app.platform.providers.sqlite_models import (
     AppSetting,
     AuditLog,
+    ColumnBusinessLogic,
     DatasetMetadata,
     ExportHistory,
     Issue,
@@ -275,6 +277,67 @@ class SQLiteSchemaRepository(SchemaRepository):
                 Schema.project_id == project_id, Schema.is_active == 1
             ).update({Schema.is_active: 0})
             self.session.flush()
+        except Exception as e:
+            raise map_persistence_exception(e) from e
+
+
+class SQLiteColumnBusinessLogicRepository(ColumnBusinessLogicRepository):
+    """SQLite implementation of column business logic persistence."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    async def save_business_logic(
+        self, fingerprint: str, business_logic: dict[str, Any]
+    ) -> dict[str, Any]:
+        try:
+            existing = self.session.execute(
+                select(ColumnBusinessLogic).where(
+                    ColumnBusinessLogic.fingerprint == fingerprint
+                )
+            ).scalar_one_or_none()
+            if existing:
+                existing.business_logic_json = json.dumps(business_logic)
+                existing.updated_at = datetime.datetime.utcnow()
+            else:
+                entry = ColumnBusinessLogic(
+                    fingerprint=fingerprint,
+                    business_logic_json=json.dumps(business_logic),
+                )
+                self.session.add(entry)
+            self.session.flush()
+            return {"fingerprint": fingerprint, "business_logic": business_logic}
+        except Exception as e:
+            raise map_persistence_exception(e) from e
+
+    async def get_business_logic(self, fingerprint: str) -> dict[str, Any] | None:
+        try:
+            entry = self.session.execute(
+                select(ColumnBusinessLogic).where(
+                    ColumnBusinessLogic.fingerprint == fingerprint
+                )
+            ).scalar_one_or_none()
+            if not entry:
+                return None
+            return {
+                "fingerprint": entry.fingerprint,
+                "business_logic": json.loads(entry.business_logic_json),
+                "created_at": entry.created_at,
+                "updated_at": entry.updated_at,
+            }
+        except Exception as e:
+            raise map_persistence_exception(e) from e
+
+    async def delete_business_logic(self, fingerprint: str) -> None:
+        try:
+            entry = self.session.execute(
+                select(ColumnBusinessLogic).where(
+                    ColumnBusinessLogic.fingerprint == fingerprint
+                )
+            ).scalar_one_or_none()
+            if entry:
+                self.session.delete(entry)
+                self.session.flush()
         except Exception as e:
             raise map_persistence_exception(e) from e
 
@@ -702,6 +765,7 @@ class SQLiteUnitOfWork(UnitOfWork):
         if not sqlite_db_manager._session_factory:
             raise PersistenceError("Database manager has not been initialized.")
         self.session = sqlite_db_manager._session_factory()
+        self._column_business = SQLiteColumnBusinessLogicRepository(self.session)
         self._projects = SQLiteProjectRepository(self.session)
         self._schemas = SQLiteSchemaRepository(self.session)
         self._settings = SQLiteSettingsRepository(self.session)
@@ -712,6 +776,12 @@ class SQLiteUnitOfWork(UnitOfWork):
         self._issues = SQLiteIssueRepository(self.session)
         self._audits = SQLiteAuditRepository(self.session)
         return self
+
+    @property
+    def column_business(self) -> ColumnBusinessLogicRepository:
+        if not self.session:
+            raise PersistenceError("No active session transaction.")
+        return self._column_business
 
     @property
     def projects(self) -> ProjectRepository:
@@ -806,6 +876,25 @@ class SQLitePersistenceProvider(PersistenceProvider):
 
     def unit_of_work(self) -> UnitOfWork:
         return SQLiteUnitOfWork()
+
+    async def save_business_logic(
+        self, fingerprint: str, business_logic: dict[str, Any]
+    ) -> dict[str, Any]:
+        async with self.unit_of_work() as uow:
+            res = await uow.column_business.save_business_logic(
+                fingerprint, business_logic
+            )
+            await uow.commit()
+            return res
+
+    async def get_business_logic(self, fingerprint: str) -> dict[str, Any] | None:
+        async with self.unit_of_work() as uow:
+            return await uow.column_business.get_business_logic(fingerprint)
+
+    async def delete_business_logic(self, fingerprint: str) -> None:
+        async with self.unit_of_work() as uow:
+            await uow.column_business.delete_business_logic(fingerprint)
+            await uow.commit()
 
     async def create_project(
         self,

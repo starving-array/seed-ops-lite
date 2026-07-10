@@ -270,6 +270,21 @@ class AppSetting(Base):
     )
 
 
+class ColumnBusinessLogic(Base):
+    """Column business logic metadata keyed by schema fingerprint."""
+
+    __tablename__ = "column_business"
+
+    fingerprint: Mapped[str] = mapped_column(String(64), primary_key=True)
+    business_logic_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
 class LLMTelemetry(Base):
     """Persistent telemetry record for every LLM gateway execution."""
 

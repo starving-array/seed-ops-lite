@@ -139,6 +139,27 @@ class DatasetMetadataRepository(ABC):
         pass
 
 
+class ColumnBusinessLogicRepository(ABC):
+    """Repository interface for column business logic metadata."""
+
+    @abstractmethod
+    async def save_business_logic(
+        self, fingerprint: str, business_logic: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Persist column business logic for a schema fingerprint."""
+        pass
+
+    @abstractmethod
+    async def get_business_logic(self, fingerprint: str) -> dict[str, Any] | None:
+        """Retrieve column business logic for a schema fingerprint."""
+        pass
+
+    @abstractmethod
+    async def delete_business_logic(self, fingerprint: str) -> None:
+        """Delete column business logic for a schema fingerprint."""
+        pass
+
+
 class SettingsRepository(ABC):
     """Repository interface for platform and application configurations."""
 

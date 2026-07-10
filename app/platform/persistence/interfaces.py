@@ -4,6 +4,7 @@ from typing import Any
 
 from app.platform.persistence.repositories import (
     AuditRepository,
+    ColumnBusinessLogicRepository,
     DatasetMetadataRepository,
     ExportRepository,
     IssueRepository,
@@ -17,6 +18,12 @@ from app.platform.persistence.repositories import (
 
 class UnitOfWork(ABC):
     """Abstract interface defining the Unit of Work pattern for managing transaction boundaries."""
+
+    @property
+    @abstractmethod
+    def column_business(self) -> ColumnBusinessLogicRepository:
+        """Access the column business logic repository namespace."""
+        pass
 
     @property
     @abstractmethod
@@ -99,6 +106,23 @@ class PersistenceProvider(ABC):
     @abstractmethod
     def unit_of_work(self) -> UnitOfWork:
         """Return a Unit of Work instance managing one transaction."""
+        pass
+
+    @abstractmethod
+    async def save_business_logic(
+        self, fingerprint: str, business_logic: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Persist column business logic for a schema fingerprint."""
+        pass
+
+    @abstractmethod
+    async def get_business_logic(self, fingerprint: str) -> dict[str, Any] | None:
+        """Retrieve column business logic for a schema fingerprint."""
+        pass
+
+    @abstractmethod
+    async def delete_business_logic(self, fingerprint: str) -> None:
+        """Delete column business logic for a schema fingerprint."""
         pass
 
     @abstractmethod

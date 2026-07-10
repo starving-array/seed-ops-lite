@@ -154,14 +154,27 @@ class SerializerRegistry:
     @classmethod
     def get(cls, format_name: str) -> FormatSerializer:
         """Instantiate and return the requested format serializer."""
+        import structlog
+
+        logger = structlog.get_logger()
         serializer_cls = cls._registry.get(format_name.lower())
         if not serializer_cls:
             from app.export.exceptions import UnsupportedFormatException
 
+            logger.warning(
+                "SerializerRegistry format not found",
+                format_name=format_name,
+                registry_keys=list(cls._registry.keys()),
+            )
             raise UnsupportedFormatException(
                 f"Unsupported export format: '{format_name}'. "
                 f"Supported formats: {list(cls._registry.keys())}"
             )
+        logger.info(
+            "SerializerRegistry resolved",
+            format_name=format_name,
+            serializer=serializer_cls.__name__,
+        )
         return serializer_cls()
 
 
