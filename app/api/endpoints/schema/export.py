@@ -153,15 +153,16 @@ async def run_export_background(
         )
 
         serialized_data = export_res.serialized_data
-        zip_placeholder = export_settings.compression
 
         final_filename = f"dataset_{export_job_id[:8]}"
         if export_settings.file_name_convention == "timestamp":
             final_filename = f"export_{int(time.time())}"
 
-        if zip_placeholder or len(serialized_data) > 1:
+        needs_zip = export_settings.compression or len(serialized_data) > 1
+        if needs_zip:
             zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            compression_mode = zipfile.ZIP_DEFLATED if export_settings.compression else zipfile.ZIP_STORED
+            with zipfile.ZipFile(zip_buffer, "w", compression_mode) as zip_file:
                 if export_settings.include_metadata:
                     meta = {
                         "exportedAt": datetime.utcnow().isoformat() + "Z",
@@ -229,9 +230,13 @@ async def run_export_background(
                 "fileSizeBytes": len(file_bytes),
                 "checksum": checksum,
                 "format": fmt,
+                "compression": export_settings.compression,
+                "include_metadata": export_settings.include_metadata,
+                "file_name_convention": export_settings.file_name_convention,
+                "tables": list(records.keys()),
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "downloadPlaceholder": f"/schema/export/{export_job_id}/download",
-                # Stored for disk-fallback recovery if RuntimeProvider cache expires
+                # Stored for re-export recovery if RuntimeProvider cache expires
                 "workflowId": export_settings.workflow_id,
             },
             persistence=persistence,
@@ -375,10 +380,37 @@ async def download_exported_file(
     """Retrieves and downloads the serialized data file for a completed export job.
 
     Resolution order:
-    1. RuntimeProvider ephemeral payload cache (fast path).
-    2. Re-stream from DiskDatasetStorageManager Parquet files (Redis-offline fallback).
+    1. Check job status (must be Completed).
+    2. RuntimeProvider ephemeral payload cache (fast path).
+    3. Re-export from persisted records with original format/compression settings.
     """
-    # 1. Try RuntimeProvider cache (fast path)
+    from app.export.exporter import ExportEngine
+    from app.export.models import ExportRequest
+
+    # 1. Look up job and check status
+    job_dict = await persistence.get_job(export_job_id)
+    if not job_dict:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Export job {export_job_id} not found.",
+        )
+
+    status = job_dict.get("status")
+    if status in ("Queued", "Running"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Export job {export_job_id} is still {status}. "
+                "Wait for completion before downloading."
+            ),
+        )
+    if status == "Failed":
+        raise HTTPException(
+            status_code=410,
+            detail=f"Export job {export_job_id} failed and has no downloadable output.",
+        )
+
+    # 2. Try RuntimeProvider cache (fast path)
     payload_bytes = None
     with contextlib.suppress(Exception):
         payload_bytes = await db.get(f"export:{export_job_id}:payload")
@@ -395,56 +427,145 @@ async def download_exported_file(
             },
         )
 
-    # 2. Disk fallback — look up the job in SQLite to find the original generation workflow
-    job_dict = await persistence.get_job(export_job_id)
-    if not job_dict:
+    # 3. Cache expired — reconstruct from persisted records
+    details = job_dict.get("details") or {}
+    workflow_id = details.get("workflowId")
+    fmt = details.get("format")
+    if not workflow_id or not fmt:
         raise HTTPException(
             status_code=404,
             detail=(
-                f"Export job {export_job_id} not found. "
-                "The export payload has expired and the original job record was not found."
+                "Cannot reconstruct export: required metadata "
+                "(workflowId or format) missing from job record."
             ),
         )
 
-    details = job_dict.get("details") or {}
-    # The generation workflow_id is stored in the export request settings, not directly
-    # in job details — fall back to a ZIP stream from DiskDatasetStorageManager if available.
     from app.platform.container import get_dataset_storage_manager
 
     ds_manager = get_dataset_storage_manager()
-
-    # Attempt to find associated generation job via SQLite metadata
-    # The export job may carry the workflow_id in result_summary or details
-    workflow_id = details.get("workflowId") or details.get("workflow_id")
-
-    if not workflow_id:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"Exported payload not found or expired for export job {export_job_id}. "
-                "Restart the export to regenerate the download."
-            ),
-        )
-
     manifest = await ds_manager.get_dataset_metadata(workflow_id)
     if not manifest:
         raise HTTPException(
             status_code=404,
             detail=(
                 f"Dataset files not found for workflow {workflow_id}. "
-                "The dataset may have been purged from disk."
+                "The dataset may have been purged."
             ),
         )
 
-    # Stream a fresh ZIP package from Parquet files
+    all_records: dict[str, list[Any]] = {}
+    for table_info in manifest.get("tables", []):
+        t_name = table_info["name"]
+        try:
+            rows = await ds_manager.read_table_dataset_preview(
+                workflow_id, t_name, limit=100_000
+            )
+            all_records[t_name] = rows
+        except Exception as exc:
+            from app.core.logging.logging import logger
+            from app.telemetry.events import EventID
 
-    zip_chunks = list(ds_manager.stream_multi_table_zip(workflow_id))
-    file_bytes = b"".join(zip_chunks)
-    filename = f"dataset_{workflow_id[:8]}.zip"
+            logger.error(
+                EventID.LOG_ERROR,
+                f"Failed to read table {t_name} from disk for re-export",
+                error=str(exc),
+            )
+            continue
+
+    if not all_records:
+        raise HTTPException(
+            status_code=404,
+            detail="No dataset records found for re-export.",
+        )
+
+    # Apply table filter from original export settings
+    tables = details.get("tables") or []
+    if tables:
+        records = {t: all_records[t] for t in tables if t in all_records}
+    else:
+        records = all_records
+
+    if not records:
+        raise HTTPException(
+            status_code=404,
+            detail="No matching table records found for re-export.",
+        )
+
+    # Run ExportEngine with original format
+    engine = ExportEngine()
+    options = {"indent": 2, "delimiter": ","}
+    export_req = ExportRequest(
+        records=records, format=fmt, target_directory=None, options=options
+    )
+    export_res = await engine.export(export_req)
+    if not export_res.success:
+        err_msg = export_res.errors[0] if export_res.errors else "Unknown error"
+        raise HTTPException(status_code=500, detail=f"Re-export failed: {err_msg}")
+
+    # Package using original compression settings
+    serialized_data = export_res.serialized_data
+    compression_enabled = details.get("compression", False)
+    include_metadata = details.get("include_metadata", False)
+    file_name_convention = details.get("file_name_convention", "default")
+
+    final_filename = f"dataset_{export_job_id[:8]}"
+    if file_name_convention == "timestamp":
+        final_filename = f"export_{int(time.time())}"
+
+    needs_zip = compression_enabled or len(serialized_data) > 1
+    if needs_zip:
+        zip_buffer = io.BytesIO()
+        compression_mode = (
+            zipfile.ZIP_DEFLATED if compression_enabled else zipfile.ZIP_STORED
+        )
+        with zipfile.ZipFile(zip_buffer, "w", compression_mode) as zip_file:
+            if include_metadata:
+                meta = {
+                    "exportedAt": datetime.utcnow().isoformat() + "Z",
+                    "format": fmt,
+                    "tables": list(records.keys()),
+                    "totalRecords": sum(len(rows) for rows in records.values()),
+                }
+                zip_file.writestr("metadata.json", json.dumps(meta, indent=2))
+            for fname, fbytes in serialized_data.items():
+                zip_file.writestr(fname, fbytes)
+        file_bytes = zip_buffer.getvalue()
+        filename = f"{final_filename}.zip"
+        mime_type = "application/zip"
+    else:
+        fname = next(iter(serialized_data.keys()))
+        file_bytes = serialized_data[fname]
+        ext = fname.split(".")[-1]
+        filename = f"{final_filename}.{ext}"
+        mime_types = {
+            "json": "application/json",
+            "csv": "text/csv",
+            "sql": "application/sql",
+        }
+        mime_type = mime_types.get(ext, "application/octet-stream")
+
+    # Re-cache the payload for subsequent requests
+    import hashlib
+
+    checksum = hashlib.sha256(file_bytes).hexdigest()
+    export_payload = {
+        "bytes": file_bytes.hex(),
+        "filename": filename,
+        "mimeType": mime_type,
+        "fileSizeBytes": len(file_bytes),
+        "checksum": checksum,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "format": fmt,
+    }
+    with contextlib.suppress(Exception):
+        await db.set(
+            f"export:{export_job_id}:payload",
+            json.dumps(export_payload),
+        )
 
     return Response(
         content=file_bytes,
-        media_type="application/zip",
+        media_type=mime_type,
         headers={
             "Content-Disposition": f"attachment; filename={filename}",
             "Content-Length": str(len(file_bytes)),
