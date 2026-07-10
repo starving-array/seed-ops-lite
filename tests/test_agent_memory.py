@@ -230,7 +230,6 @@ async def test_cache_hits_and_misses_metrics(
         patch.object(memory_manager.cache, "set", side_effect=mock_set),
         patch.object(memory_manager.cache, "delete", side_effect=mock_delete),
     ):
-
         # Write entry (Populates cache asynchronously)
         await memory_manager.write(
             workflow_id="wf-metrics",

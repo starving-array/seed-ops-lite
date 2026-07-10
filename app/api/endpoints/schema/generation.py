@@ -153,16 +153,47 @@ async def run_generation_background(
 
     try:
         from app.seeder.allocator import RecordAllocator
-        from app.seeder.fk_injector import ForeignKeyInjector
         from app.seeder.math_computer import MathComputer
         from app.seeder.pk_generator import PrimaryKeyGenerator
-        from app.seeder.relationship_allocator import RelationshipAllocator
+        from app.seeder.relationship_planner import (
+            DeferredReferenceResolver,
+            RelationshipPlanner,
+            SelfReferencePlanner,
+        )
 
-        # 1. Allocate Placeholders
+        # 1. Run Semantic Analyzer (FIRST — produces dependency metadata)
+        from app.seeder.semantic_analyzer import SemanticAnalyzer
+
+        semantic_metadata = SemanticAnalyzer.analyze(schema)
+
+        # 1b. Build dependency graph from semantic metadata
+        dep_graph = SemanticAnalyzer.build_dependency_graph(semantic_metadata)
+        try:
+            ordered_from_graph, _, _ = dep_graph.get_topological_sort_and_layers()
+            if ordered_from_graph:
+                ordered_tables = ordered_from_graph
+        except Exception:  # noqa: S110
+            pass
+
+        # 2. Allocate Placeholders
         placeholders = RecordAllocator.allocate(schema, ordered_tables, row_targets)
 
-        # 2. Allocate Relationships
-        relationship_map = RelationshipAllocator.allocate(schema, placeholders, seed)
+        # 3. Generate PKs (BEFORE relationship planning — PK values must exist)
+        PrimaryKeyGenerator.generate(schema, placeholders, seed or 1)
+
+        # 4. Plan all relationships (assigns FK values from parent PKs)
+        rel_stats = RelationshipPlanner.plan(schema, placeholders, seed)  # noqa: F841
+        self_ref_stats = SelfReferencePlanner.plan(  # noqa: F841
+            schema, placeholders, semantic_metadata, seed
+        )
+        deferred_stats = DeferredReferenceResolver.resolve(  # noqa: F841
+            schema, placeholders, semantic_metadata, seed
+        )
+
+        # 5. Run Domain Intelligence Engine
+        from app.seeder.domain_intelligence import DomainIntelligenceEngine
+
+        domain_context = DomainIntelligenceEngine.analyze(schema)
 
         for t_name in ordered_tables:
             # Check for cancellation
@@ -229,12 +260,45 @@ async def run_generation_background(
                 batch_limit = min(
                     curr_batch_size, target_rows - rows_generated_for_table
                 )
+
+                fk_context = []
+                for bi in range(batch_limit):
+                    idx = rows_generated_for_table + bi
+                    rec = placeholders[t_name][idx]
+                    fk_vals = {}
+                    for col in table_obj.columns:
+                        if col.is_primary_key:
+                            fk_vals[col.name] = rec.get(col.name)
+                            continue
+                        is_fk = False
+                        for rel in schema.relationships:
+                            if (
+                                rel.source_table_id == table_obj.id
+                                and rel.source_column_id == col.id
+                            ):
+                                is_fk = True
+                                break
+                            if (
+                                rel.target_table_id == table_obj.id
+                                and rel.target_column_id == col.id
+                            ):
+                                is_fk = True
+                                break
+                        if is_fk:
+                            fk_vals[col.name] = rec.get(col.name)
+                    fk_context.append(fk_vals)
+
+                meta_with_fk = dict(semantic_metadata.get(t_name, {}))
+                meta_with_fk["fk_context"] = fk_context
+
                 seed_req = SeedRequest(
                     target=t_name,
                     num_records=batch_limit,
                     fields=fields,
                     seed=seed,
                     strict=True,
+                    semantic_metadata=meta_with_fk,
+                    domain_context=domain_context,
                 )
 
                 seed_res = await seeder.seed(seed_req)
@@ -304,16 +368,65 @@ async def run_generation_background(
             )
 
         if not generation_cancelled:
-            # 6. Generate PKs
-            PrimaryKeyGenerator.generate(schema, placeholders, seed or 1)
+            # 8. Computed Fields
+            math_stats = MathComputer.compute(schema, placeholders)
+            import structlog
 
-            # 7. Inject FKs
-            ForeignKeyInjector.inject(schema, placeholders, relationship_map)
+            logger = structlog.get_logger()
+            logger.info(
+                "MathComputer executed",
+                computed=math_stats.get("computed", 0),
+                skipped_null_source=math_stats.get("skipped_null_source", 0),
+            )
 
-            # 8. Compute Math
-            MathComputer.compute(schema, placeholders)
+            # 9. Business Rule Engine (Repairs)
+            from app.seeder.business_rules import BusinessRuleEngine
 
-            # 9. Assign all_records and Write Parquet
+            repair_stats = BusinessRuleEngine.enforce(
+                schema, placeholders, semantic_metadata
+            )
+
+            # Log repair statistics
+            import structlog
+
+            logger = structlog.get_logger()
+            logger.info(
+                "Business Rule Engine executed",
+                rules_evaluated=repair_stats["rules_evaluated"],
+                rules_violated=repair_stats["rules_violated"],
+                rules_repaired=repair_stats["rules_repaired"],
+                repairs=repair_stats["repairs"],
+            )
+
+            # 10. Validation Gate
+            from app.seeder.validator import SeederValidator
+
+            ref_errors = SeederValidator.validate_referential_integrity(
+                schema, placeholders
+            )
+            pk_errors = SeederValidator.validate_pk_uniqueness(schema, placeholders)
+            self_errors = SeederValidator.validate_self_references(placeholders)
+            junction_errors = SeederValidator.validate_junction_uniqueness(placeholders)
+
+            all_validation_errors = (
+                ref_errors + pk_errors + self_errors + junction_errors
+            )
+            if all_validation_errors:
+                import structlog
+
+                logger = structlog.get_logger()
+                logger.warning(
+                    "Validation gate",
+                    referential_errors=len(ref_errors),
+                    pk_errors=len(pk_errors),
+                    self_ref_errors=len(self_errors),
+                    junction_errors=len(junction_errors),
+                    total=len(all_validation_errors),
+                )
+                for ve in all_validation_errors:
+                    logger.warning("Validation issue", detail=ve)
+
+            # 11. Dump placeholders into export/status pipeline Parquet
             from app.platform.container import get_dataset_storage_manager
 
             ds_manager = get_dataset_storage_manager()

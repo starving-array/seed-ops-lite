@@ -5,6 +5,7 @@ import re
 import uuid
 from typing import Any
 
+from app.schemas.schema_design import SchemaModel
 from app.seeder.models import FieldDefinition
 
 
@@ -149,5 +150,196 @@ class SeederValidator:
                         errors.append(
                             f"Field '{field_name}' length {len(value)} is greater than max_length {max_len}."
                         )
+
+        return errors
+
+    @staticmethod
+    def validate_referential_integrity(
+        schema: SchemaModel,
+        placeholders: dict[str, list[dict[str, Any]]],
+    ) -> list[str]:
+        """Validate that every FK value references an existing PK in the parent table.
+
+        Returns:
+            List of validation error messages.
+        """
+        errors: list[str] = []
+        table_by_id = {t.id: t for t in schema.tables}
+        col_id_to_name = {}
+        for t in schema.tables:
+            for c in t.columns:
+                col_id_to_name[c.id] = c.name
+
+        for rel in schema.relationships:
+            src_table = table_by_id.get(rel.source_table_id)
+            tgt_table = table_by_id.get(rel.target_table_id)
+            if not src_table or not tgt_table:
+                continue
+            if src_table.name == tgt_table.name:
+                continue
+
+            src_col_name = col_id_to_name.get(rel.source_column_id)
+            tgt_col_name = col_id_to_name.get(rel.target_column_id)
+            if not src_col_name or not tgt_col_name:
+                continue
+
+            src_is_pk = any(
+                c.id == rel.source_column_id and c.is_primary_key
+                for c in src_table.columns
+            )
+            tgt_is_pk = any(
+                c.id == rel.target_column_id and c.is_primary_key
+                for c in tgt_table.columns
+            )
+
+            if src_is_pk and not tgt_is_pk:
+                parent_table = src_table.name
+                parent_pk_col = src_col_name
+                child_table = tgt_table.name
+                child_fk_col = tgt_col_name
+            elif tgt_is_pk and not src_is_pk:
+                parent_table = tgt_table.name
+                parent_pk_col = tgt_col_name
+                child_table = src_table.name
+                child_fk_col = src_col_name
+            elif src_is_pk and tgt_is_pk:
+                parent_table = src_table.name
+                parent_pk_col = src_col_name
+                child_table = tgt_table.name
+                child_fk_col = tgt_col_name
+            else:
+                continue
+
+            parent_pks = {
+                r.get(parent_pk_col)
+                for r in placeholders.get(parent_table, [])
+                if r.get(parent_pk_col) is not None
+            }
+
+            for rec in placeholders.get(child_table, []):
+                fk_val = rec.get(child_fk_col)
+                if fk_val is not None and fk_val not in parent_pks:
+                    ref_id = rec.get("_ref_id", "?")
+                    errors.append(
+                        f"Referential integrity violation: {child_table}.{child_fk_col}"
+                        f" = {fk_val} not found in {parent_table}.{parent_pk_col}"
+                        f" (ref: {ref_id}, relationship: {rel.name})"
+                    )
+
+        return errors
+
+    @staticmethod
+    def validate_pk_uniqueness(
+        schema: SchemaModel,
+        placeholders: dict[str, list[dict[str, Any]]],
+    ) -> list[str]:
+        """Validate that PK values are unique within each table.
+
+        Only single-column PKs are checked; composite PKs may have duplicate
+        values in individual columns (uniqueness is on the pair).
+        Use validate_junction_uniqueness for composite PKs.
+
+        Returns:
+            List of validation error messages.
+        """
+        errors: list[str] = []
+        table_pk_cols: dict[str, list[str]] = {}
+        for t in schema.tables:
+            table_pk_cols[t.name] = [c.name for c in t.columns if c.is_primary_key]
+
+        for table_name, records in placeholders.items():
+            pk_cols = table_pk_cols.get(table_name, [])
+            if not pk_cols or len(pk_cols) > 1:
+                continue
+
+            seen: set[Any] = set()
+            col = pk_cols[0]
+            for rec in records:
+                val = rec.get(col)
+                if val is not None and val in seen:
+                    errors.append(
+                        f"PK uniqueness violation: {table_name}.{col}"
+                        f" = {val} is duplicated"
+                    )
+                if val is not None:
+                    seen.add(val)
+        return errors
+
+    @staticmethod
+    def validate_self_references(
+        placeholders: dict[str, list[dict[str, Any]]],
+    ) -> list[str]:
+        """Validate that self-referencing FK values don't point to the same record.
+
+        Detects columns where a FK value equals the record's own PK value
+        (e.g. manager_id == employee_id for the same record).
+
+        Returns:
+            List of validation error messages.
+        """
+        errors: list[str] = []
+        for table_name, records in placeholders.items():
+            for rec in records:
+                pk_cols = [
+                    k for k in rec if not k.startswith("_") and k != "manager_id"
+                ]
+                pk_val = None
+                for pc in pk_cols:
+                    v = rec.get(pc)
+                    if v is not None:
+                        pk_val = v
+                        break
+
+                for fk_col in (
+                    "manager_id",
+                    "reports_to",
+                    "parent_id",
+                    "supervisor_id",
+                ):
+                    if fk_col in rec:
+                        fk_val = rec[fk_col]
+                        if (
+                            fk_val is not None
+                            and pk_val is not None
+                            and fk_val == pk_val
+                        ):
+                            ref_id = rec.get("_ref_id", "?")
+                            errors.append(
+                                f"Self-reference violation: {table_name}.{fk_col}"
+                                f" = {fk_val} equals PK {pk_val}"
+                                f" (ref: {ref_id})"
+                            )
+
+        return errors
+
+    @staticmethod
+    def validate_junction_uniqueness(
+        placeholders: dict[str, list[dict[str, Any]]],
+    ) -> list[str]:
+        """Validate that junction table row pairs are unique.
+
+        A junction table is detected by having a composite key pattern
+        where all PK columns are also FK columns.
+
+        Returns:
+            List of validation error messages.
+        """
+        errors: list[str] = []
+        for table_name, records in placeholders.items():
+            cols = [k for k in (records[0] if records else {}) if not k.startswith("_")]
+            pk_candidates = [c for c in cols if c.endswith("_id")]
+            if len(pk_candidates) < 2:
+                continue
+
+            seen_pairs: set[tuple[Any, ...]] = set()
+            for rec in records:
+                pair = tuple(rec.get(c) for c in pk_candidates)
+                if all(v is not None for v in pair):
+                    if pair in seen_pairs:
+                        errors.append(
+                            f"Junction uniqueness violation: {table_name}"
+                            f" duplicate pair {dict(zip(pk_candidates, pair, strict=False))}"
+                        )
+                    seen_pairs.add(pair)
 
         return errors

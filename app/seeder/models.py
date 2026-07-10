@@ -54,6 +54,14 @@ class SeedRequest(BaseModel):
         default=False,
         description="If True, raises a ValidationException when any record fails validation.",
     )
+    semantic_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Semantic metadata containing classifications and dependencies for the target table.",
+    )
+    domain_context: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Domain intelligence metadata providing industry context and instructions.",
+    )
 
 
 class GeneratedRecord(BaseModel):

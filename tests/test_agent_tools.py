@@ -53,7 +53,9 @@ class MockConcreteTool(Tool):
         return not self.should_fail_validation
 
     async def execute(
-        self, request: ToolRequest, context: ToolContext  # noqa: ARG002
+        self,
+        request: ToolRequest,
+        context: ToolContext,  # noqa: ARG002
     ) -> ToolResponse:
         if self.execution_delay > 0.0:
             await asyncio.sleep(self.execution_delay)

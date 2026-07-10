@@ -100,7 +100,6 @@ async def test_runtime_manager_recovery() -> None:
         patch("app.core.lifecycle.redis.redis_manager.connect", AsyncMock()),
         patch.object(rm.redis_provider, "ping", AsyncMock(return_value=True)),
     ):
-
         # Give it a brief moment for the recovery task to wake up and process
         await asyncio.sleep(0.05)
         assert rm.mode == "redis"

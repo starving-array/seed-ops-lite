@@ -82,6 +82,8 @@ class ExportValidator:
                     if not isinstance(row, dict):
                         continue
                     for col_name, val in row.items():
+                        if col_name == "_lineage":
+                            continue
                         if isinstance(val, dict | list | set | tuple):
                             errors.append(
                                 f"Export compatibility violation: Table '{table_name}' record index {idx} "

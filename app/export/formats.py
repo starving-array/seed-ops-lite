@@ -77,10 +77,15 @@ class CSVSerializer(FormatSerializer):
                 continue
 
             try:
-                # Use keys of first record as headers
-                headers = list(rows[0].keys())
+                # Use keys of first record as headers, filtering out _lineage
+                headers = [k for k in rows[0] if k != "_lineage"]
                 output = io.StringIO()
-                writer = csv.DictWriter(output, fieldnames=headers, delimiter=delimiter)
+                writer = csv.DictWriter(
+                    output,
+                    fieldnames=headers,
+                    delimiter=delimiter,
+                    extrasaction="ignore",
+                )
                 writer.writeheader()
                 writer.writerows(rows)
                 serialized_outputs[f"{table_name}.csv"] = output.getvalue().encode(
@@ -114,9 +119,10 @@ class SQLSerializer(FormatSerializer):
             if not rows:
                 continue
             for row in rows:
-                cols = ", ".join(row.keys())
+                row_filtered = {k: v for k, v in row.items() if k != "_lineage"}
+                cols = ", ".join(row_filtered.keys())
                 vals = []
-                for val in row.values():
+                for val in row_filtered.values():
                     if val is None:
                         vals.append("NULL")
                     elif isinstance(val, bool):
