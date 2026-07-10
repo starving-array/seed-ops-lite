@@ -41,12 +41,14 @@ class ColumnDef:
         name: str,
         data_type: str,
         is_pk: bool = False,
+        is_nullable: bool = True,
         fk_ref: tuple[str, str] | None = None,
     ) -> None:
         """Initialize ColumnDef."""
         self.name = name
         self.data_type = data_type
         self.is_pk = is_pk
+        self.is_nullable = is_nullable
         self.fk_ref = fk_ref
 
 
@@ -242,8 +244,14 @@ class DDLValidator:
                     )
 
                 is_pk = False
+                is_nullable = True
+                if re.search(r"\bNOT\s+NULL\b", col_rest, re.IGNORECASE):
+                    is_nullable = False
+                elif re.search(r"\bNULL\b", col_rest, re.IGNORECASE):
+                    is_nullable = True
                 if re.search(r"\bPRIMARY\s+KEY\b", col_rest, re.IGNORECASE):
                     is_pk = True
+                    is_nullable = False
                     table_def.pk_columns.add(col_name)
 
                 fk_ref = None
@@ -286,7 +294,7 @@ class DDLValidator:
                 )
                 data_type = type_match.group(1) if type_match else "UNKNOWN"
 
-                column_def = ColumnDef(col_name, data_type, is_pk, fk_ref)
+                column_def = ColumnDef(col_name, data_type, is_pk, is_nullable, fk_ref)
                 table_def.columns[col_name.lower()] = column_def
 
             tables[table_name.lower()] = table_def

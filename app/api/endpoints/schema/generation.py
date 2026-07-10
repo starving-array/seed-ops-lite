@@ -153,7 +153,6 @@ async def run_generation_background(
 
     try:
         from app.seeder.allocator import RecordAllocator
-        from app.seeder.math_computer import MathComputer
         from app.seeder.pk_generator import PrimaryKeyGenerator
         from app.seeder.relationship_planner import (
             DeferredReferenceResolver,
@@ -194,6 +193,20 @@ async def run_generation_background(
         from app.seeder.domain_intelligence import DomainIntelligenceEngine
 
         domain_context = DomainIntelligenceEngine.analyze(schema)
+
+        # 5b. Fetch Column Business Logic Guide (Redis/DB/LLM)
+        from app.seeder.column_guide import get_column_guide
+
+        column_guide = None
+        try:
+            column_guide = await get_column_guide(schema, db_client, persistence)
+        except Exception:
+            import structlog
+
+            structlog.get_logger().warning(
+                "Failed to load column guide, proceeding without it",
+                exc_info=True,
+            )
 
         for t_name in ordered_tables:
             # Check for cancellation
@@ -290,6 +303,8 @@ async def run_generation_background(
 
                 meta_with_fk = dict(semantic_metadata.get(t_name, {}))
                 meta_with_fk["fk_context"] = fk_context
+                if column_guide:
+                    meta_with_fk["column_guide"] = column_guide.get(t_name, {})
 
                 seed_req = SeedRequest(
                     target=t_name,
@@ -368,18 +383,8 @@ async def run_generation_background(
             )
 
         if not generation_cancelled:
-            # 8. Computed Fields
-            math_stats = MathComputer.compute(schema, placeholders)
-            import structlog
-
-            logger = structlog.get_logger()
-            logger.info(
-                "MathComputer executed",
-                computed=math_stats.get("computed", 0),
-                skipped_null_source=math_stats.get("skipped_null_source", 0),
-            )
-
-            # 9. Business Rule Engine (Repairs)
+            # 8. Business Rule Engine (Repairs) — MathComputer is deprecated;
+            # column business logic is now injected at generation time via ColumnGuideService.
             from app.seeder.business_rules import BusinessRuleEngine
 
             repair_stats = BusinessRuleEngine.enforce(
@@ -704,6 +709,16 @@ async def start_generation(
     )
 
     return initial_status
+
+
+@router.get("/generate/{workflow_id}/status", response_model=GenerateResponseModel)
+async def get_generation_status_by_status(
+    workflow_id: str,
+    db: RuntimeProviderType = Depends(get_runtime_provider),
+    persistence: PersistenceProvider = Depends(get_persistence_provider),
+) -> GenerateResponseModel:
+    """Alias for get_generation_status — provides a /status endpoint for client compatibility."""
+    return await get_generation_status(workflow_id, db, persistence)
 
 
 @router.get("/generate/{workflow_id}", response_model=GenerateResponseModel)
