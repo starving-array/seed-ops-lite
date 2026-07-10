@@ -1,3 +1,4 @@
+import contextlib
 import csv
 import io
 import json
@@ -6,7 +7,8 @@ from typing import Any
 
 from fastapi import Depends, File, Form, HTTPException, UploadFile, status
 
-from app.api.endpoints.schema.helpers import DEFAULT_SCHEMA
+from app.api.deps import get_runtime_provider
+from app.api.endpoints.schema.helpers import DEFAULT_SCHEMA, RuntimeProviderType
 from app.platform.container import get_persistence_provider
 from app.platform.persistence.interfaces import PersistenceProvider
 from app.platform.persistence.resolver import ProjectResolver
@@ -51,8 +53,11 @@ async def load_schema(
 async def save_schema(
     schema: SchemaModel,
     db: PersistenceProvider = Depends(get_persistence_provider),
+    runtime: RuntimeProviderType = Depends(get_runtime_provider),
 ) -> dict[str, str]:
     """Saves the current schema state to SQLite."""
+    from app.seeder.column_guide import invalidate_column_guide
+
     project_id = ProjectResolver.get_active_project_id()
     try:
         # Determine next increment version num
@@ -70,6 +75,11 @@ async def save_schema(
             tables=tables_dict,
             relationships=relationships_dict,
         )
+
+        # Invalidate column guide — schema changed
+        with contextlib.suppress(Exception):
+            await invalidate_column_guide(schema, runtime, db)
+
         return {"status": "success", "message": "Schema saved successfully"}
     except Exception as exc:
         raise HTTPException(
@@ -81,17 +91,33 @@ async def save_schema(
 async def put_schema(
     schema: SchemaModel,
     db: PersistenceProvider = Depends(get_persistence_provider),
+    runtime: RuntimeProviderType = Depends(get_runtime_provider),
 ) -> dict[str, str]:
     """Updates/Saves the current schema state to SQLite."""
-    return await save_schema(schema, db)
+    return await save_schema(schema, db, runtime)
 
 
 async def delete_schema(
     db: PersistenceProvider = Depends(get_persistence_provider),
+    runtime: RuntimeProviderType = Depends(get_runtime_provider),
 ) -> dict[str, str]:
     """Deactivates/deletes the active schema state in SQLite."""
+    from app.seeder.column_guide import invalidate_column_guide
+
     project_id = ProjectResolver.get_active_project_id()
     try:
+        # Fetch current schema before deactivating to get the fingerprint
+        current = await db.get_active_schema(project_id=project_id)
+        if current:
+            from app.schemas.schema_design import SchemaModel
+
+            schema = SchemaModel(
+                tables=current.get("tables", []),
+                relationships=current.get("relationships", []),
+            )
+            with contextlib.suppress(Exception):
+                await invalidate_column_guide(schema, runtime, db)
+
         await db.deactivate_schema(project_id=project_id)
         return {"status": "success", "message": "Schema deleted successfully"}
     except Exception as exc:
@@ -106,6 +132,7 @@ async def import_schema(
     file_type: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),  # noqa: B008
     db: PersistenceProvider = Depends(get_persistence_provider),
+    runtime: RuntimeProviderType = Depends(get_runtime_provider),
 ) -> SchemaModel:
     """Import schema from a SQL, DDL, CSV, JSON, TXT, or Excel file and save to the active project."""
     project_id = ProjectResolver.get_active_project_id()
@@ -165,7 +192,7 @@ async def import_schema(
                             name=col_def.name,
                             type=col_def.data_type,
                             isPrimaryKey=col_def.is_pk,
-                            isNullable=True,
+                            isNullable=col_def.is_nullable,
                             defaultValue="",
                         )
                     )
@@ -321,7 +348,7 @@ async def import_schema(
                                 name=col_def.name,
                                 type=col_def.data_type,
                                 isPrimaryKey=col_def.is_pk,
-                                isNullable=True,
+                                isNullable=col_def.is_nullable,
                                 defaultValue="",
                             )
                         )
@@ -408,6 +435,12 @@ async def import_schema(
         tables=tables_dict,
         relationships=relationships_dict,
     )
+
+    # Invalidate column guide — schema changed after import
+    from app.seeder.column_guide import invalidate_column_guide
+
+    with contextlib.suppress(Exception):
+        await invalidate_column_guide(schema, runtime, db)
 
     return schema
 

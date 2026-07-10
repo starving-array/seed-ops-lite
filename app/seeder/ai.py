@@ -77,58 +77,44 @@ class AIStrategy(BaseStrategy):
         prompt_text = f"Generate a list of exactly {count} synthetic records for the target '{target}'.\n"
         semantic_metadata = kwargs.get("semantic_metadata", {})
 
-        if semantic_metadata:
-            computed_fields = semantic_metadata.get("computed_fields", [])
+        prompt_text += "Business Fields to generate:\n"
+        for name in fields:
+            field_def = fields[name]
+            prompt_text += f"- {name}: type={field_def.type}"
+            if field_def.rules:
+                prompt_text += f", rules={field_def.rules}"
+            prompt_text += "\n"
 
-            prompt_text += "Business Fields to generate:\n"
-            for name in fields:
-                field_def = fields[name]
-                prompt_text += f"- {name}: type={field_def.type}"
-                if field_def.rules:
-                    prompt_text += f", rules={field_def.rules}"
+        column_guide = semantic_metadata.get("column_guide", {})
+        if column_guide:
+            prompt_text += "\nColumn Business Logic:\n"
+            for col_name, col_info in column_guide.items():
+                meaning = col_info.get("business_meaning", "")
+                prompt_text += f"- {col_name}: {meaning}"
+                deps = col_info.get("depends_on", [])
+                if deps:
+                    prompt_text += f" | depends on: {', '.join(deps)}"
+                formula = col_info.get("formula")
+                if formula:
+                    prompt_text += f" | formula: {formula}"
+                constraints = col_info.get("constraints", [])
+                if constraints:
+                    prompt_text += f" | constraints: {', '.join(constraints)}"
+                vr = col_info.get("value_range")
+                if (
+                    isinstance(vr, dict)
+                    and vr.get("min") is not None
+                    and vr.get("max") is not None
+                ):
+                    prompt_text += f" | range: {vr['min']}-{vr['max']} ({vr.get('distribution', 'uniform')})"
+                cw = col_info.get("categorical_weights")
+                if isinstance(cw, dict):
+                    weights_str = ", ".join(
+                        f"{k}={v:.0%}"
+                        for k, v in sorted(cw.items(), key=lambda x: -x[1])
+                    )
+                    prompt_text += f" | weights: {weights_str}"
                 prompt_text += "\n"
-
-            if computed_fields:
-                prompt_text += "\nComputed Fields (Python will compute these, DO NOT generate values or calculations for them):\n"
-                for cf in computed_fields:
-                    prompt_text += f"- {cf}\n"
-
-            temporal_deps = semantic_metadata.get("temporal_dependencies", [])
-            if temporal_deps:
-                prompt_text += "\nTemporal Rules:\n"
-                for dep in temporal_deps:
-                    prompt_text += (
-                        f"- Maintain realistic chronology for: {' -> '.join(dep)}\n"
-                    )
-
-            monetary_deps = semantic_metadata.get("monetary_dependencies", [])
-            if monetary_deps:
-                prompt_text += "\nNumeric Rules:\n"
-                for dep in monetary_deps:
-                    prompt_text += (
-                        f"- Generate realistic values for: {', '.join(dep)}\n"
-                    )
-
-            status_deps = semantic_metadata.get("status_dependencies", [])
-            if status_deps:
-                prompt_text += "\nStatus Rules:\n"
-                for dep in status_deps:
-                    prompt_text += (
-                        f"- Ensure logical consistency between: {', '.join(dep)}\n"
-                    )
-        else:
-            prompt_text += "Here are the fields to generate and their rules:\n"
-            for name, field_def in fields.items():
-                prompt_text += f"- {name}: type={field_def.type}"
-                if field_def.rules:
-                    prompt_text += f", rules={field_def.rules}"
-                prompt_text += "\n"
-
-        domain_context = kwargs.get("domain_context", {})
-        if domain_context and domain_context.get("enrichment"):
-            prompt_text += f"\nDomain Context:\n{domain_context['enrichment']}\n"
-            if domain_context.get("terminologies"):
-                prompt_text += f"- Common Terminologies: {', '.join(domain_context['terminologies'])}\n"
 
         prompt_text += (
             f"\nPlease generate exactly {count} records, ensuring they are diverse, realistic, and coherent. "
@@ -140,7 +126,7 @@ class AIStrategy(BaseStrategy):
             prompt=prompt_text,
             system_instruction=system_instruction,
             json_mode=True,
-            temperature=kwargs.get("temperature", 0.7),
+            temperature=kwargs.get("temperature", 0.3),
         )
 
         contract_request = AIContractRequest[AIResponseSchema](
@@ -168,17 +154,19 @@ class AIStrategy(BaseStrategy):
             records_data = contract_response.data.records
             records_list = [rec.model_dump() for rec in records_data]  # type: ignore[attr-defined]
 
-            # Adjust list to match count exactly if mismatch occurs
+            # Retry loop for shortfall — never silently duplicate rows
+            MAX_TOPUP_ATTEMPTS = 3  # noqa: N806
+            attempts = 0
+            while len(records_list) < count and attempts < MAX_TOPUP_ATTEMPTS:
+                shortfall = count - len(records_list)
+                topup = await self.generate(fields, shortfall, **kwargs)
+                records_list.extend(topup)
+                attempts += 1
             if len(records_list) < count:
-                while len(records_list) < count:
-                    if records_list:
-                        records_list.append(records_list[-1].copy())
-                    else:
-                        records_list.append({name: "" for name in fields})
-            elif len(records_list) > count:
-                records_list = records_list[:count]
-
-            return records_list
+                raise GenerationException(
+                    f"Unable to generate required {count} records after {MAX_TOPUP_ATTEMPTS} attempts (got {len(records_list)})."
+                )
+            return records_list[:count]
 
         raise GenerationException(
             "AI Strategy returned no data or data in invalid format."

@@ -70,6 +70,15 @@ class RelationshipPlanner:
 
             rel_type = rel.type.lower()
 
+            # Normalize human-readable type codes to short form
+            _type_map = {
+                "one-to-many": "1:n",
+                "many-to-one": "n:1",
+                "one-to-one": "1:1",
+                "many-to-many": "m:n",
+            }
+            rel_type = _type_map.get(rel_type, rel_type)
+
             if src_is_pk and not tgt_is_pk:
                 parent_table = src_table.name
                 parent_pk_col = src_col_name

@@ -24,6 +24,500 @@ from app.schemas.schema_design import (
 router = APIRouter()
 
 
+def _ci_get(rec: dict[str, Any], key: str) -> Any:
+    """Case-insensitive dict lookup. Tries exact match first, then lowercase."""
+    val = rec.get(key)
+    if val is not None:
+        return val
+    kl = key.lower()
+    for k, v in rec.items():
+        if k.lower() == kl:
+            return v
+    return None
+
+
+def _evaluate_formulas(
+    placeholders: dict[str, list[dict[str, Any]]],
+    column_guide: dict[str, Any] | None,
+    strict: bool = True,
+) -> None:
+    """Post-process generated records: compute formula-based fields from column guide.
+
+    Topologically resolves computed fields so dependencies are computed first.
+    Uses Decimal for financial precision. Raises loudly on failure in strict mode.
+    """
+    import ast
+    import operator
+    import re
+    from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+    import structlog
+
+    def _safe_eval(expr: str, vars_dict: dict[str, Decimal]) -> Decimal:
+        ops = {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.USub: operator.neg,
+            ast.UAdd: operator.pos,
+        }
+
+        def _eval_node(node: ast.AST) -> Decimal:
+            if isinstance(node, ast.Num):
+                return Decimal(str(node.n))
+            elif isinstance(node, ast.Constant):  # noqa: RET505
+                return Decimal(str(node.value))
+            elif isinstance(node, ast.Name):
+                return vars_dict[node.id]
+            elif isinstance(node, ast.BinOp):
+                return ops[type(node.op)](_eval_node(node.left), _eval_node(node.right))  # type: ignore
+            elif isinstance(node, ast.UnaryOp):
+                return ops[type(node.op)](_eval_node(node.operand))  # type: ignore
+            raise ValueError(f"Unsupported node type: {type(node)}")
+
+        return _eval_node(ast.parse(expr, mode="eval").body)
+
+    _log = structlog.get_logger()
+    if not column_guide:
+        _log.info("Formula computation skipped — no column guide available")
+        return
+
+    _SAFE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")  # noqa: N806
+    _AGGREGATE_FUNCS = {"SUM", "COUNT", "AVG", "MIN", "MAX", "COALESCE"}  # noqa: N806
+
+    for t_name, records in placeholders.items():
+        t_guide = column_guide.get(t_name, {})
+        if not t_guide:
+            continue
+
+        formulas = {c: i["formula"] for c, i in t_guide.items() if i.get("formula")}
+        if not formulas:
+            continue
+
+        # Skip formulas using aggregate functions (e.g. SUM, COUNT) — not row-level
+        row_level = {
+            c: f
+            for c, f in formulas.items()
+            if not _AGGREGATE_FUNCS & set(re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", f))
+        }
+        if not row_level:
+            continue
+        skipped = {c: f for c, f in formulas.items() if c not in row_level}
+        if skipped:
+            _log.info("Skipping aggregate formulas", table=t_name, formulas=skipped)
+
+        _log.info(
+            "Formula computation: processing table",
+            table=t_name,
+            formulas=list(row_level.keys()),
+        )
+        formulas = row_level
+
+        # Topological sort: resolve dependencies between computed fields
+        remaining = dict(formulas)
+        resolved_order = []
+        while remaining:
+            progressed = False
+            for name, expr in list(remaining.items()):
+                tokens = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", expr)
+                deps = [t for t in tokens if t != name and t in remaining]
+                if not deps:
+                    resolved_order.append(name)
+                    del remaining[name]
+                    progressed = True
+            if not progressed:
+                raise ValueError(
+                    f"Circular or unresolvable dependency among formulas for table '{t_name}': {list(remaining)}"
+                )
+
+        # Pre-check: identify tokens that don't belong to any real column
+        # so the eval loop can substitute 0 instead of raising
+        _all_real_cols_lower: set[str] = set()
+        for _r in records:
+            _all_real_cols_lower.update(k.lower() for k in _r)
+
+        for rec in records:
+            for name in resolved_order:
+                formula = formulas[name]
+                try:
+                    raw_formula = formula.strip()
+                    tokens = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", raw_formula)
+                    local_vars = {}
+                    for t in tokens:
+                        if not _SAFE_NAME_RE.match(t):
+                            raise ValueError(f"Unsafe token in formula: {t}")
+                        val = _ci_get(rec, t)
+                        if val is None:
+                            # Token not in record — could be missing column or non-existent
+                            if t.lower() in _all_real_cols_lower:
+                                # Real column that wasn't generated — error
+                                if strict:
+                                    raise ValueError(
+                                        f"Formula references missing/ungenerated field: {t}"
+                                    )
+                                continue
+                            # Non-existent column — substitute 0
+                            local_vars[t] = Decimal("0")
+                            _log.warning(
+                                "Formula references non-existent column — substituting 0",
+                                table=t_name,
+                                column=name,
+                                formula=formula,
+                                missing_token=t,
+                            )
+                            continue
+                        try:
+                            local_vars[t] = Decimal(str(val))
+                        except InvalidOperation:
+                            if strict:
+                                raise ValueError(  # noqa: B904
+                                    f"Field '{t}' is not numeric: {val!r}"
+                                )  # noqa: B904, RUF100
+                            continue
+                    # Arithmetic-only eval with Decimal
+                    allowed_chars = set(
+                        "0123456789.+-*/() " + "".join(local_vars.keys())
+                    )
+                    safe_expr = "".join(
+                        c if c in allowed_chars else "" for c in raw_formula
+                    )
+                    result = _safe_eval(safe_expr, local_vars)
+                    rec[name] = float(
+                        result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    )
+                except Exception as e:
+                    if strict:
+                        raise
+                    _log.warning(
+                        "Formula computation error",
+                        table=t_name,
+                        column=name,
+                        formula=formula,
+                        error=str(e),
+                    )
+                    rec[name] = None
+
+
+def _is_likely_date_column(col_name: str, col_info: dict[str, Any]) -> bool:
+    """Check if a column is likely a date/timestamp type."""
+    name_lower = col_name.lower()
+    dt_keywords = {"date", "time", "_at", "timestamp"}
+    if any(kw in name_lower for kw in dt_keywords):
+        return True
+    dt = col_info.get("data_type", "")
+    if dt.lower() in ("date", "timestamp", "datetime", "time"):
+        return True
+    meaning = (col_info.get("business_meaning") or "").lower()
+    if any(kw in meaning for kw in ("date", "timestamp", "time")):
+        return True
+    return False
+
+
+def _enforce_temporal_rules(
+    placeholders: dict[str, list[dict[str, Any]]],
+    column_guide: dict[str, Any] | None,
+) -> None:
+    """Repair temporal ordering violations (e.g. shipped_date >= order_date).
+
+    Reads `temporal_rule` from column guide entries, or falls back to parsing
+    constraint expressions like "shipped_date >= order_date" from the
+    `constraints` list. Fixes violated dates by adding an offset to the
+    reference date.
+    """
+    import re
+    from datetime import datetime, timedelta
+
+    import structlog
+
+    _log = structlog.get_logger()
+    if not column_guide:
+        return
+
+    # Regex to parse constraint like "col_a >= col_b" (both are column names)
+    _TEMP_CONSTRAINT_RE = re.compile(  # noqa: N806
+        r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|>|<=|<)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*$"
+    )
+
+    _TEMP_COL_NAMES = {"date", "timestamp", "datetime"}  # noqa: N806
+
+    for t_name, records in placeholders.items():
+        t_guide = column_guide.get(t_name, {})
+        if not t_guide:
+            continue
+
+        # Build temporal rules: try three strategies in order
+        temporal_rules: dict[str, dict[str, Any]] = {}
+        for c, i in t_guide.items():
+            # Strategy 1: structured temporal_rule from new-format column guide
+            rule = i.get("temporal_rule")
+            if isinstance(rule, dict) and rule.get("reference_column"):
+                temporal_rules[c] = rule
+                continue
+
+            # Strategy 2: parse constraints for date-ordering patterns
+            found = False
+            for constraint in i.get("constraints", []):
+                m = _TEMP_CONSTRAINT_RE.match(str(constraint))
+                if not m:
+                    continue
+                lhs, op, rhs = m.groups()
+                if lhs == c and rhs != c:
+                    temporal_rules[c] = {
+                        "reference_column": rhs,
+                        "relation": op,
+                        "min_offset_days": 1,
+                        "max_offset_days": 4,
+                    }
+                    found = True
+                    break
+                if rhs == c and lhs != c:
+                    reverse_op = {">=": "<=", "<=": ">=", ">": "<", "<": ">"}.get(
+                        op, ">="
+                    )
+                    temporal_rules[c] = {
+                        "reference_column": lhs,
+                        "relation": reverse_op,
+                        "min_offset_days": 1,
+                        "max_offset_days": 4,
+                    }
+                    found = True
+                    break
+            if found:
+                continue
+
+            # Strategy 3: infer from depends_on — if both columns are dates, enforce >=
+            deps = i.get("depends_on", [])
+            if deps and _is_likely_date_column(c, i):
+                for dep in deps:
+                    dep_info = t_guide.get(dep, {})
+                    if _is_likely_date_column(dep, dep_info):
+                        temporal_rules[c] = {
+                            "reference_column": dep,
+                            "relation": ">=",
+                            "min_offset_days": 1,
+                            "max_offset_days": 4,
+                        }
+                        break
+
+        if not temporal_rules:
+            continue
+
+        _log.info("Enforcing temporal rules", table=t_name, rules=temporal_rules)
+        for rec in records:
+            for col, rule in temporal_rules.items():
+                ref_col = rule.get("reference_column")
+                if not ref_col or col not in rec or ref_col not in rec:
+                    continue
+                try:
+                    ref_val = rec[ref_col]
+                    col_val = rec[col]
+                    if isinstance(ref_val, str):
+                        ref_dt = datetime.fromisoformat(ref_val)
+                    else:
+                        ref_dt = ref_val
+                    if isinstance(col_val, str):
+                        col_dt = datetime.fromisoformat(col_val)
+                    else:
+                        col_dt = col_val
+                except (ValueError, TypeError):
+                    continue
+
+                relation = rule.get("relation", ">=")
+                min_off = rule.get("min_offset_days", 1)
+                max_off = rule.get("max_offset_days", min_off + 3)
+                import random
+
+                offset = random.randint(min_off, max_off)  # noqa: S311
+
+                if (
+                    relation == ">="
+                    and col_dt < ref_dt
+                    or relation == ">"
+                    and col_dt <= ref_dt
+                ):
+                    rec[col] = (ref_dt + timedelta(days=offset)).isoformat()
+                elif (
+                    relation == "<="
+                    and col_dt > ref_dt
+                    or relation == "<"
+                    and col_dt >= ref_dt
+                ):
+                    rec[col] = (ref_dt - timedelta(days=offset)).isoformat()
+
+
+def _validate_status_values(
+    placeholders: dict[str, list[dict[str, Any]]],
+    column_guide: dict[str, Any] | None,
+) -> None:
+    """Snap invalid status values to the most common valid state.
+
+    Reads `workflow` from column guide entries and replaces any status value
+    not in the union of allowed states with the first terminal state (or first
+    non-terminal state if no terminal states defined).
+    """
+    import structlog
+
+    _log = structlog.get_logger()
+    if not column_guide:
+        return
+
+    for t_name, records in placeholders.items():
+        t_guide = column_guide.get(t_name, {})
+        if not t_guide:
+            continue
+
+        workflow_cols = {
+            c: i.get("workflow")
+            for c, i in t_guide.items()
+            if isinstance(i.get("workflow"), dict)
+        }
+        if not workflow_cols:
+            continue
+
+        _log.info("Validating status values", table=t_name, columns=list(workflow_cols))
+        for rec in records:
+            for col, wf in workflow_cols.items():
+                if col not in rec:
+                    continue
+                allowed = wf.get("allowed_transitions", {})
+                terminal = wf.get("terminal_states", [])
+                valid_states = set(allowed.keys()) | set(terminal)
+                for targets in allowed.values():
+                    valid_states.update(targets)
+                if not valid_states:
+                    continue
+                val = rec[col]
+                if val not in valid_states:
+                    rec[col] = terminal[0] if terminal else next(iter(allowed.keys()))
+
+
+def _aggregate_children_into_parent(
+    placeholders: dict[str, list[dict[str, Any]]],
+    column_guide: dict[str, Any] | None,
+    schema: SchemaModel,
+) -> None:
+    """Compute parent aggregate fields from child records.
+
+    For each aggregate formula in column_guide (e.g. "SUM(line_total)"),
+    finds the child table via FK relationships and computes the aggregate
+    value, overriding any LLM-generated value on the parent.
+    """
+    import re
+    from decimal import Decimal
+
+    import structlog
+
+    _log = structlog.get_logger()
+    if not column_guide:
+        return
+
+    # Build table_id → table_name mapping
+    table_by_id: dict[str, str] = {t.id: t.name for t in schema.tables}
+    col_by_id: dict[str, tuple[str, str]] = {}  # col_id → (table_name, col_name)
+    for t in schema.tables:
+        for c in t.columns:
+            col_by_id[c.id] = (t.name, c.name)
+
+    # Build FK mapping: (child_table, child_fk_col) → (parent_table, parent_pk_col)
+    # by looking at source→target relationships
+    fk_map: dict[tuple[str, str], tuple[str, str]] = {}
+    for rel in schema.relationships:
+        src_t = table_by_id.get(rel.source_table_id)
+        src_c = col_by_id.get(rel.source_column_id)
+        tgt_t = table_by_id.get(rel.target_table_id)
+        tgt_c = col_by_id.get(rel.target_column_id)
+        if src_t and src_c and tgt_t and tgt_c:
+            fk_map[(src_t, src_c[1])] = (tgt_t, tgt_c[1])
+
+    _AGGREGATE_FUNCS = {"SUM", "COUNT", "AVG", "MIN", "MAX", "COALESCE"}  # noqa: N806
+
+    for t_name, t_guide in column_guide.items():
+        if t_name not in placeholders:
+            continue
+        records = placeholders[t_name]
+
+        for col_name, col_info in t_guide.items():
+            formula = col_info.get("formula")
+            if not formula:
+                continue
+            tokens = set(re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", formula))
+            agg_funcs_in_formula = tokens & _AGGREGATE_FUNCS
+            if not agg_funcs_in_formula:
+                continue
+
+            # Parse aggregate: e.g. SUM(line_total) → func=SUM, child_field=line_total
+            for func in agg_funcs_in_formula:
+                pattern = re.compile(
+                    rf"{re.escape(func)}\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)"
+                )
+                m = pattern.search(formula)
+                if not m:
+                    continue
+                child_field = m.group(1)
+
+                # Find child table: look for FK pointing TO this parent table
+                child_table = None
+                child_fk_col = None
+                parent_pk_col = None
+                for (ct, cfk), (pt, ppk) in fk_map.items():
+                    if pt == t_name:
+                        child_table = ct
+                        child_fk_col = cfk
+                        parent_pk_col = ppk
+                        break
+
+                if not child_table or child_table not in placeholders:
+                    continue
+
+                child_records = placeholders[child_table]
+                _log.info(
+                    "Aggregating children into parent",
+                    parent=t_name,
+                    parent_field=col_name,
+                    child=child_table,
+                    child_field=child_field,
+                    func=func,
+                    fk=f"{child_table}.{child_fk_col} → {t_name}.{parent_pk_col}",
+                )
+
+                # Group child records by FK value
+                from collections import defaultdict
+
+                child_groups: dict[str, list[Decimal]] = defaultdict(list)
+                for crec in child_records:
+                    fk_val = crec.get(child_fk_col)  # type: ignore[arg-type]
+                    cval = crec.get(child_field)
+                    if fk_val is not None and cval is not None:
+                        try:
+                            child_groups[str(fk_val)].append(Decimal(str(cval)))
+                        except Exception:  # noqa: S112
+                            continue
+
+                # Compute aggregate and override parent field
+                for prec in records:
+                    pk_val = str(prec.get(parent_pk_col))  # type: ignore[arg-type]
+                    if pk_val not in child_groups:
+                        continue
+                    vals = child_groups[pk_val]
+                    if func == "SUM":
+                        prec[col_name] = float(
+                            sum(vals, Decimal("0")).quantize(Decimal("0.01"))
+                        )
+                    elif func == "COUNT":
+                        prec[col_name] = len(vals)
+                    elif func == "AVG" and vals:
+                        prec[col_name] = float(
+                            (
+                                sum(vals, Decimal("0")) / Decimal(str(len(vals)))
+                            ).quantize(Decimal("0.01"))
+                        )
+                    elif func == "MIN":
+                        prec[col_name] = float(min(vals))
+                    elif func == "MAX":
+                        prec[col_name] = float(max(vals))
+
+
 async def run_generation_background(
     workflow_id: str,
     schema: SchemaModel,
@@ -153,7 +647,6 @@ async def run_generation_background(
 
     try:
         from app.seeder.allocator import RecordAllocator
-        from app.seeder.math_computer import MathComputer
         from app.seeder.pk_generator import PrimaryKeyGenerator
         from app.seeder.relationship_planner import (
             DeferredReferenceResolver,
@@ -190,10 +683,27 @@ async def run_generation_background(
             schema, placeholders, semantic_metadata, seed
         )
 
-        # 5. Run Domain Intelligence Engine
-        from app.seeder.domain_intelligence import DomainIntelligenceEngine
+        # 5. Fetch Column Business Logic Guide (Redis/DB/LLM)
+        from app.seeder.column_guide import get_column_guide
 
-        domain_context = DomainIntelligenceEngine.analyze(schema)
+        column_guide = None
+        try:
+            column_guide = await get_column_guide(schema, db_client, persistence)
+            import structlog
+
+            structlog.get_logger().info(
+                "Column guide loaded",
+                loaded=column_guide is not None,
+                table_keys=list(column_guide.keys()) if column_guide else None,
+            )
+        except Exception as e:
+            import structlog
+
+            structlog.get_logger().error(
+                "Failed to load column guide — formula hints, distributions, and business logic will be missing from the generation prompt",
+                error=str(e),
+                exc_info=True,
+            )
 
         for t_name in ordered_tables:
             # Check for cancellation
@@ -290,15 +800,38 @@ async def run_generation_background(
 
                 meta_with_fk = dict(semantic_metadata.get(t_name, {}))
                 meta_with_fk["fk_context"] = fk_context
+                t_guide = (column_guide or {}).get(t_name, {})
+                if t_guide:
+                    meta_with_fk["column_guide"] = t_guide
+
+                # Exclude row-level computed fields from LLM generation
+                # Only exclude if ALL formula dependencies are real columns
+                import re as _re
+
+                _agg_funcs = {"SUM", "COUNT", "AVG", "MIN", "MAX", "COALESCE"}
+                _real_cols = {c.name.lower() for c in table_obj.columns}
+                _row_level_computed = set()
+                for _c, _i in t_guide.items():
+                    _f = _i.get("formula")
+                    if not _f:
+                        continue
+                    _tokens = set(_re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", _f))
+                    if _agg_funcs & _tokens:
+                        continue  # aggregate — can't compute row-level
+                    _deps = _tokens - {_c} - _agg_funcs
+                    if _deps and _deps <= _real_cols:
+                        _row_level_computed.add(_c)  # all deps exist, exclude from LLM
+                gen_fields = {
+                    k: v for k, v in fields.items() if k not in _row_level_computed
+                }
 
                 seed_req = SeedRequest(
                     target=t_name,
                     num_records=batch_limit,
-                    fields=fields,
+                    fields=gen_fields,
                     seed=seed,
                     strict=True,
                     semantic_metadata=meta_with_fk,
-                    domain_context=domain_context,
                 )
 
                 seed_res = await seeder.seed(seed_req)
@@ -368,18 +901,38 @@ async def run_generation_background(
             )
 
         if not generation_cancelled:
-            # 8. Computed Fields
-            math_stats = MathComputer.compute(schema, placeholders)
-            import structlog
+            import structlog as _slog
 
-            logger = structlog.get_logger()
-            logger.info(
-                "MathComputer executed",
-                computed=math_stats.get("computed", 0),
-                skipped_null_source=math_stats.get("skipped_null_source", 0),
-            )
+            _plog = _slog.get_logger()
 
-            # 9. Business Rule Engine (Repairs)
+            # 7.5a Temporal Enforcement: repair date ordering violations
+            try:
+                _enforce_temporal_rules(placeholders, column_guide)
+            except Exception as _e:
+                _plog.error("Temporal enforcement failed", error=str(_e), exc_info=True)
+
+            # 7.5b Status Validation: snap invalid status values to valid set
+            try:
+                _validate_status_values(placeholders, column_guide)
+            except Exception as _e:
+                _plog.error("Status validation failed", error=str(_e), exc_info=True)
+
+            # 7.5c Cross-table Aggregation: compute parent aggregates from children
+            try:
+                _aggregate_children_into_parent(placeholders, column_guide, schema)
+            except Exception as _e:
+                _plog.error(
+                    "Cross-table aggregation failed", error=str(_e), exc_info=True
+                )
+
+            # 7.5d Formula Computation: evaluate column guide formulas on generated records
+            try:
+                _evaluate_formulas(placeholders, column_guide)
+            except Exception as _e:
+                _plog.error("Formula computation failed", error=str(_e), exc_info=True)
+
+            # 8. Business Rule Engine (Repairs) — MathComputer is deprecated;
+            # column business logic is now injected at generation time via ColumnGuideService.
             from app.seeder.business_rules import BusinessRuleEngine
 
             repair_stats = BusinessRuleEngine.enforce(
@@ -704,6 +1257,16 @@ async def start_generation(
     )
 
     return initial_status
+
+
+@router.get("/generate/{workflow_id}/status", response_model=GenerateResponseModel)
+async def get_generation_status_by_status(
+    workflow_id: str,
+    db: RuntimeProviderType = Depends(get_runtime_provider),
+    persistence: PersistenceProvider = Depends(get_persistence_provider),
+) -> GenerateResponseModel:
+    """Alias for get_generation_status — provides a /status endpoint for client compatibility."""
+    return await get_generation_status(workflow_id, db, persistence)
 
 
 @router.get("/generate/{workflow_id}", response_model=GenerateResponseModel)
