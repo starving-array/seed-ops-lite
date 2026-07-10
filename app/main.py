@@ -2,6 +2,12 @@
 
 # ruff: noqa: E402
 
+import datetime
+
+# Python 3.10 compatibility: datetime.UTC was added in 3.11
+if not hasattr(datetime, "UTC"):
+    datetime.UTC = datetime.timezone.utc  # noqa: UP017 — needed for Python 3.10
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 

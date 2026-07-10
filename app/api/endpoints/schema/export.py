@@ -161,7 +161,11 @@ async def run_export_background(
         needs_zip = export_settings.compression or len(serialized_data) > 1
         if needs_zip:
             zip_buffer = io.BytesIO()
-            compression_mode = zipfile.ZIP_DEFLATED if export_settings.compression else zipfile.ZIP_STORED
+            compression_mode = (
+                zipfile.ZIP_DEFLATED
+                if export_settings.compression
+                else zipfile.ZIP_STORED
+            )
             with zipfile.ZipFile(zip_buffer, "w", compression_mode) as zip_file:
                 if export_settings.include_metadata:
                     meta = {
