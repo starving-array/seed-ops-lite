@@ -131,6 +131,8 @@ class HybridSeeder:
                     request.num_records,
                     target=request.target,
                     seed=request.seed,
+                    semantic_metadata=request.semantic_metadata,
+                    domain_context=request.domain_context,
                 )
 
             # 3. Combine results
@@ -148,6 +150,18 @@ class HybridSeeder:
                     merged_data.update(ai_results[i])
                     for name in ai_fields:
                         strategy_used[name] = GenerationStrategy.AI
+
+                from app.seeder.lineage import LineageEngine
+
+                for f_name, strat in strategy_used.items():
+                    origin = (
+                        "LLM Generated"
+                        if strat == GenerationStrategy.AI
+                        else "Python Generated"
+                    )
+                    LineageEngine.record_origin(
+                        merged_data, f_name, origin, "Business value generated."
+                    )
 
                 # Apply branding to email fields
                 from app.core.settings.config import settings

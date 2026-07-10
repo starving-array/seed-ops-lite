@@ -185,7 +185,6 @@ pnpm-debug.log*
 # ============================================================================
 # Keep These Tracked
 # ============================================================================
-!.env.example
 !README.md
 !LICENSE
 !CHANGELOG.md
@@ -202,7 +201,10 @@ pnpm-debug.log*
 # Docs 
 docs/learning/
 docs/architecture/brain/
+ignorefile
+
 
 # SQLite databases
 storage/
 *.sqlite*
+

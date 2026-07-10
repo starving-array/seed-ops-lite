@@ -164,6 +164,16 @@ async def run_generation_background(
         # 2. Allocate Relationships
         relationship_map = RelationshipAllocator.allocate(schema, placeholders, seed)
 
+        # 2.5 Run Semantic Analyzer
+        from app.seeder.semantic_analyzer import SemanticAnalyzer
+
+        semantic_metadata = SemanticAnalyzer.analyze(schema)
+
+        # 2.6 Run Domain Intelligence Engine
+        from app.seeder.domain_intelligence import DomainIntelligenceEngine
+
+        domain_context = DomainIntelligenceEngine.analyze(schema)
+
         for t_name in ordered_tables:
             # Check for cancellation
             cancel_flag = await db_client.get(f"generation:{workflow_id}:cancel")
@@ -235,6 +245,8 @@ async def run_generation_background(
                     fields=fields,
                     seed=seed,
                     strict=True,
+                    semantic_metadata=semantic_metadata.get(t_name, {}),
+                    domain_context=domain_context,
                 )
 
                 seed_res = await seeder.seed(seed_req)
@@ -308,12 +320,51 @@ async def run_generation_background(
             PrimaryKeyGenerator.generate(schema, placeholders, seed or 1)
 
             # 7. Inject FKs
-            ForeignKeyInjector.inject(schema, placeholders, relationship_map)
+            fk_stats = ForeignKeyInjector.inject(schema, placeholders, relationship_map)
+            import structlog
 
-            # 8. Compute Math
-            MathComputer.compute(schema, placeholders)
+            logger = structlog.get_logger()
+            logger.info(
+                "FK injection completed",
+                total_injected=fk_stats.total_injected,
+                missing_src=fk_stats.missing_src,
+                missing_tgt=fk_stats.missing_tgt,
+                null_pk=fk_stats.null_pk,
+                ambiguous=fk_stats.ambiguous,
+                by_relationship=fk_stats.by_relationship,
+            )
 
-            # 9. Assign all_records and Write Parquet
+            # 7. Math
+            math_stats = MathComputer.compute(schema, placeholders)
+            import structlog
+
+            logger = structlog.get_logger()
+            logger.info(
+                "MathComputer executed",
+                computed=math_stats.get("computed", 0),
+                skipped_null_source=math_stats.get("skipped_null_source", 0),
+            )
+
+            # 8. Business Rule Engine (Repairs)
+            from app.seeder.business_rules import BusinessRuleEngine
+
+            repair_stats = BusinessRuleEngine.enforce(
+                schema, placeholders, semantic_metadata
+            )
+
+            # Log repair statistics
+            import structlog
+
+            logger = structlog.get_logger()
+            logger.info(
+                "Business Rule Engine executed",
+                rules_evaluated=repair_stats["rules_evaluated"],
+                rules_violated=repair_stats["rules_violated"],
+                rules_repaired=repair_stats["rules_repaired"],
+                repairs=repair_stats["repairs"],
+            )
+
+            # 9. Dump placeholders into export/status pipeline Parquet
             from app.platform.container import get_dataset_storage_manager
 
             ds_manager = get_dataset_storage_manager()

@@ -124,6 +124,12 @@ async def run_audit():
         # 3. Relationships
         relationship_map = RelationshipAllocator.allocate(schema, placeholders, 42)
         
+        from app.seeder.semantic_analyzer import SemanticAnalyzer
+        semantic_metadata = SemanticAnalyzer.analyze(schema)
+        
+        from app.seeder.domain_intelligence import DomainIntelligenceEngine
+        domain_context = DomainIntelligenceEngine.analyze(schema)
+        
         # 4. Generate Business Data
         for t_name in ordered_tables:
             table_obj = next(t for t in schema.tables if t.name == t_name)
@@ -143,7 +149,15 @@ async def run_audit():
                     continue
                 fields[col.name] = map_column_to_field_def(col.name, col.type, col.is_primary_key)
                 
-            req = SeedRequest(target=t_name, num_records=row_targets[t_name], fields=fields, seed=42)
+            req = SeedRequest(
+                target=t_name,
+                num_records=row_targets[t_name],
+                fields=fields,
+                seed=42,
+                strict=True,
+                semantic_metadata=semantic_metadata.get(t_name, {}),
+                domain_context=domain_context,
+            )
             res = await seeder.seed(req)
             if res.success:
                 for i, r in enumerate(res.records):
@@ -157,6 +171,11 @@ async def run_audit():
         
         # 7. Math
         MathComputer.compute(schema, placeholders)
+        
+        # 8. Business Rule Engine
+        from app.seeder.business_rules import BusinessRuleEngine
+        repair_stats = BusinessRuleEngine.enforce(schema, placeholders, semantic_metadata)
+        print(f"Repairs: {repair_stats}")
         
         # Save output
         clean_records = {}

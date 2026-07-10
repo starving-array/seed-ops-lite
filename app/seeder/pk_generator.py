@@ -40,17 +40,37 @@ class PrimaryKeyGenerator:
                 current_id = start_id
 
                 for record in records:
+                    from app.seeder.lineage import LineageEngine
+
                     if is_uuid:
                         # Generate deterministic UUID based on table and sequential index
                         unique_name = f"{table_name}_{current_id}"
                         record[pk_col.name] = str(
                             uuid.uuid5(uuid.NAMESPACE_OID, unique_name)
                         )
+                        LineageEngine.record_origin(
+                            record,
+                            pk_col.name,
+                            "PK Generated",
+                            "Deterministic UUID based on table and index.",
+                        )
                     elif is_int:
                         # Auto increment / Integer
                         record[pk_col.name] = current_id
+                        LineageEngine.record_origin(
+                            record,
+                            pk_col.name,
+                            "PK Generated",
+                            "Auto-increment sequential integer.",
+                        )
                     else:
                         # Fallback for unrecognized types
                         record[pk_col.name] = f"PK-{current_id}"
+                        LineageEngine.record_origin(
+                            record,
+                            pk_col.name,
+                            "PK Generated",
+                            "Fallback unique string.",
+                        )
 
                     current_id += 1

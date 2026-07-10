@@ -8,12 +8,12 @@
       },
       {
         "id": 2,
-        "name": "David Rodriguez",
+        "name": "Michael Rodriguez",
         "created_at": "2026-02-13T05:40:50"
       },
       {
         "id": 3,
-        "name": "Aisha Khan",
+        "name": "Emily Johnson",
         "created_at": "2026-01-10T17:07:01"
       }
     ],
@@ -23,7 +23,7 @@
         "customer_id": 3,
         "total": 0.0,
         "order_date": "2026-03-28T16:28:29",
-        "shipped_date": "2026-02-09T19:19:27"
+        "shipped_date": "2026-05-14T16:28:29"
       },
       {
         "order_id": "1ca270a9-2b8e-50cf-bf38-b8078b136a69",
@@ -72,45 +72,45 @@
       },
       {
         "id": "4db82b49-1f8e-5a27-9c29-b86f1c90e5cb",
-        "email": "john.doe87@seedops.com"
+        "email": "blogmaster_22@seedops.com"
       },
       {
         "id": "afc62611-65df-5cdd-910a-a2fbf820457b",
-        "email": "maria.g@seedops.com"
+        "email": "content.creator.jane@seedops.com"
       }
     ],
     "Posts": [
       {
         "id": "330a180d-13a9-58df-8747-dbb5bdf0cfb1",
         "user_id": "afc62611-65df-5cdd-910a-a2fbf820457b",
-        "content": "Just finished an amazing hike up Mount Rainier! The views were breathtaking, and the trail was challenging but rewarding. Definitely recommend it for anyone looking for an adventure. #HikingLife #MountRainier #AdventureTime"
+        "content": "The recent advancements in renewable energy storage are truly groundbreaking. Lithium-ion batteries, while dominant, are facing challenges from new technologies like solid-state batteries and flow batteries, which promise greater energy density, longer lifespans, and enhanced safety. This shift could revolutionize grid stability and accelerate the transition away from fossil fuels. We're on the cusp of a major energy paradigm shift, and it's exciting to see the innovation unfold."
       },
       {
         "id": "790a9125-41e3-5bd4-aac1-e27591900a65",
         "user_id": "16a616bd-7fe2-5b74-96df-07e89ebad7e7",
-        "content": "Excited to announce that our new e-book, 'Mastering Modern Web Development,' is now available for download! It covers everything from front-end frameworks to back-end APIs. Check it out and let us know what you think! Link in bio. #WebDev #Programming #NewRelease"
+        "content": "Totally agree with your point about the importance of user experience in app development! I've seen so many brilliant ideas fail because the interface was clunky or unintuitive. It's not just about functionality; it's about making the user's journey smooth and enjoyable. Great article, really hit the nail on the head!"
       },
       {
         "id": "c5c95a40-c3eb-55ad-ba13-beab4aa61a4f",
         "user_id": "16a616bd-7fe2-5b74-96df-07e89ebad7e7",
-        "content": "Had a fantastic time at the local farmer's market this morning. Picked up some fresh organic produce and a delicious homemade pie. Supporting local businesses is so important! What are your favorite farmer's market finds? #SupportLocal #FarmersMarket #HealthyEating"
+        "content": "Our new 'Community Spotlight' series kicks off this Friday, featuring local artist Maria Rodriguez! Maria will share her journey into abstract painting, discuss her inspiration, and even demonstrate some of her unique techniques live. Join us virtually at 7 PM EST on our Facebook page for an evening of art and conversation. You won't want to miss it!"
       }
     ],
     "Comments": [
       {
         "id": "743af49e-7f30-545a-a924-1c7311983729",
         "post_id": "c5c95a40-c3eb-55ad-ba13-beab4aa61a4f",
-        "comment": "This article was incredibly insightful and well-researched. I particularly appreciated the detailed examples provided, which made complex concepts much easier to understand. Excellent work!"
+        "comment": "This was such an insightful article! I particularly enjoyed your take on the future of AI in content creation. Do you think smaller businesses will be able to keep up with these advancements without significant investment?"
       },
       {
         "id": "cd715f29-b84c-5b4b-87da-4f0ba876fcf1",
         "post_id": "790a9125-41e3-5bd4-aac1-e27591900a65",
-        "comment": "While the overall presentation was good, I found some parts of the argument a bit convoluted. Perhaps breaking down section 3.2 into smaller, more digestible paragraphs would improve clarity for future readers."
+        "comment": "While I appreciate the effort put into this post, I found some of the statistical data presented to be a bit outdated. It would be great if you could update it with more recent figures to reflect the current market trends. Otherwise, a good read!"
       },
       {
         "id": "7bb32860-a6f3-5c0e-bb44-a45061f898dd",
         "post_id": "330a180d-13a9-58df-8747-dbb5bdf0cfb1",
-        "comment": "I'm having trouble replicating the results described in step 5. Could you provide a bit more detail on the specific software version used or any particular configurations? Thanks!"
+        "comment": "Totally agree with your point about user experience being paramount. Too many sites overlook the basics. Thanks for sharing these valuable tips, I'm definitely implementing some of these today!"
       }
     ]
   },
@@ -118,15 +118,15 @@
     "Companies": [
       {
         "id": 1,
-        "name": "Quantum Innovations Inc."
+        "name": "Innovate Solutions Group"
       },
       {
         "id": 2,
-        "name": "Evergreen Solutions Ltd."
+        "name": "Sterling Industries"
       },
       {
         "id": 3,
-        "name": "Pioneer Tech Group"
+        "name": "Evergreen Health Services"
       }
     ],
     "Employees": [
@@ -147,7 +147,7 @@
       {
         "id": 3,
         "company_id": 1,
-        "name": "Priya Sharma",
+        "name": "Emily White",
         "birth_date": "2026-01-10T17:07:01",
         "hire_date": "2026-04-06T02:33:27"
       }
@@ -156,21 +156,21 @@
       {
         "id": 1,
         "employee_id": 3,
-        "salary": 63.94,
+        "salary": 63940.0,
         "tax": 0.0,
         "subtotal": 0.0
       },
       {
         "id": 2,
         "employee_id": 1,
-        "salary": 2.5,
+        "salary": 2500.0,
         "tax": 0.0,
         "subtotal": 0.0
       },
       {
         "id": 3,
         "employee_id": 2,
-        "salary": 27.5,
+        "salary": 27500.0,
         "tax": 0.0,
         "subtotal": 0.0
       }

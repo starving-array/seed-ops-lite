@@ -74,16 +74,62 @@ class AIStrategy(BaseStrategy):
             f"for the target entity '{target}'. "
             "Follow the structural contract exactly."
         )
+        prompt_text = f"Generate a list of exactly {count} synthetic records for the target '{target}'.\n"
+        semantic_metadata = kwargs.get("semantic_metadata", {})
 
-        prompt_text = (
-            f"Generate a list of exactly {count} synthetic records for the target '{target}'.\n"
-            "Here are the fields to generate and their rules:\n"
-        )
-        for name, field_def in fields.items():
-            prompt_text += f"- {name}: type={field_def.type}"
-            if field_def.rules:
-                prompt_text += f", rules={field_def.rules}"
-            prompt_text += "\n"
+        if semantic_metadata:
+            computed_fields = semantic_metadata.get("computed_fields", [])
+
+            prompt_text += "Business Fields to generate:\n"
+            for name in fields:
+                field_def = fields[name]
+                prompt_text += f"- {name}: type={field_def.type}"
+                if field_def.rules:
+                    prompt_text += f", rules={field_def.rules}"
+                prompt_text += "\n"
+
+            if computed_fields:
+                prompt_text += "\nComputed Fields (Python will compute these, DO NOT generate values or calculations for them):\n"
+                for cf in computed_fields:
+                    prompt_text += f"- {cf}\n"
+
+            temporal_deps = semantic_metadata.get("temporal_dependencies", [])
+            if temporal_deps:
+                prompt_text += "\nTemporal Rules:\n"
+                for dep in temporal_deps:
+                    prompt_text += (
+                        f"- Maintain realistic chronology for: {' -> '.join(dep)}\n"
+                    )
+
+            monetary_deps = semantic_metadata.get("monetary_dependencies", [])
+            if monetary_deps:
+                prompt_text += "\nNumeric Rules:\n"
+                for dep in monetary_deps:
+                    prompt_text += (
+                        f"- Generate realistic values for: {', '.join(dep)}\n"
+                    )
+
+            status_deps = semantic_metadata.get("status_dependencies", [])
+            if status_deps:
+                prompt_text += "\nStatus Rules:\n"
+                for dep in status_deps:
+                    prompt_text += (
+                        f"- Ensure logical consistency between: {', '.join(dep)}\n"
+                    )
+        else:
+            prompt_text += "Here are the fields to generate and their rules:\n"
+            for name, field_def in fields.items():
+                prompt_text += f"- {name}: type={field_def.type}"
+                if field_def.rules:
+                    prompt_text += f", rules={field_def.rules}"
+                prompt_text += "\n"
+
+        domain_context = kwargs.get("domain_context", {})
+        if domain_context and domain_context.get("enrichment"):
+            prompt_text += f"\nDomain Context:\n{domain_context['enrichment']}\n"
+            if domain_context.get("terminologies"):
+                prompt_text += f"- Common Terminologies: {', '.join(domain_context['terminologies'])}\n"
+
         prompt_text += (
             f"\nPlease generate exactly {count} records, ensuring they are diverse, realistic, and coherent. "
             "Return the results in the requested JSON structure containing the 'records' key."

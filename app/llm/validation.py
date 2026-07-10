@@ -1,12 +1,13 @@
 """Validation logic for LLM response text."""
 
 import json
+import re
 
 from app.llm.exceptions import LLMValidationError
 
 
 def repair_json(text: str) -> str:
-    """Attempt basic structural repair on truncated JSON."""
+    """Attempt basic structural repair on truncated or malformed JSON."""
     cleaned = text.strip()
     if cleaned.startswith("```"):
         lines = cleaned.splitlines()
@@ -29,13 +30,14 @@ def repair_json(text: str) -> str:
         if last_quote_idx != -1:
             cleaned = cleaned[:last_quote_idx].rstrip(", \n")
 
-    # Close structures
+    # Close structures (handles under-closing)
     for _ in range(opened_braces):
         cleaned += "}"
     for _ in range(opened_brackets):
         cleaned += "]"
 
-    return cleaned
+    # Handle over-closing: extra } before ] (e.g., }"Male"}}] → }"Male"}])
+    return re.sub(r"\}(?=\}\])", "", cleaned)
 
 
 def validate_response_text(text: str, json_mode: bool = False) -> None:
