@@ -7,9 +7,21 @@ SafeSeedOps Lite is an enterprise-grade synthetic relational database generator 
 ## Quick Start
 
 ### 1. Developer Environment Bootstrap
-Install dependencies:
+
+**Prerequisites:** Ensure [Python 3.10+](https://www.python.org/downloads/) and [uv](https://docs.astral.sh/uv/#installation) are installed:
 ```bash
-# Setup dependencies and validation tools
+pip install uv
+```
+
+If `uv` is not recognized after installing (Windows), add the Python Scripts folder to your PATH:
+```powershell
+$scripts = "$(python -m site --user-base)\Python310\Scripts"
+[Environment]::SetEnvironmentVariable("Path", "$env:Path;$scripts", "User")
+```
+Then restart your terminal, or run `$env:Path += ";$scripts"` in the current session.
+
+Install project dependencies:
+```bash
 uv sync
 ```
 

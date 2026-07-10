@@ -234,6 +234,14 @@ class SemanticAnalyzer:
 
             rel_type = rel.type.lower()
 
+            _type_map = {
+                "one-to-many": "1:n",
+                "many-to-one": "n:1",
+                "one-to-one": "1:1",
+                "many-to-many": "m:n",
+            }
+            rel_type = _type_map.get(rel_type, rel_type)
+
             if rel_type == "m:n":
                 continue
 
