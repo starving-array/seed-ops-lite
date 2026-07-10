@@ -95,7 +95,8 @@ def test_pk_generation():
 
     PrimaryKeyGenerator.generate(schema, placeholders, start_id=100)
 
-    # Integer check
+    # Integer check — global sequence spans all tables
+    # Users: 100, 101 | Sessions(uuid): 102 | Tokens(guid): 103 | Logs(int): 104, 105
     assert placeholders["Users"][0]["id"] == 100
     assert placeholders["Users"][1]["id"] == 101
 
@@ -109,11 +110,24 @@ def test_pk_generation():
     assert isinstance(guid_id, str)
     assert len(guid_id) == 36
 
-    # Auto Increment check
-    assert placeholders["Logs"][0]["log_id"] == 100
-    assert placeholders["Logs"][1]["log_id"] == 101
+    # Logs — sequence continued after Users(2) + Sessions(1) + Tokens(1) = 4 consumed
+    assert placeholders["Logs"][0]["log_id"] == 104
+    assert placeholders["Logs"][1]["log_id"] == 105
 
-    # Deterministic check (run again and check equality)
-    placeholders_2 = {"Sessions": [{"_ref_id": "s1", "session_id": None}]}
+    # Deterministic check — same sequence positioning yields same values
+    placeholders_2 = {
+        "Users": [
+            {"_ref_id": "u1", "id": None, "email": ""},
+            {"_ref_id": "u2", "id": None, "email": ""},
+        ],
+        "Sessions": [{"_ref_id": "s1", "session_id": None}],
+        "Tokens": [{"_ref_id": "t1", "guid_id": None}],
+        "Logs": [
+            {"_ref_id": "l1", "log_id": None},
+            {"_ref_id": "l2", "log_id": None},
+        ],
+    }
     PrimaryKeyGenerator.generate(schema, placeholders_2, start_id=100)
     assert placeholders_2["Sessions"][0]["session_id"] == sess_id
+    assert placeholders_2["Users"][0]["id"] == 100
+    assert placeholders_2["Logs"][0]["log_id"] == 104
