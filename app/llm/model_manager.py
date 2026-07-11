@@ -44,14 +44,14 @@ CATALOGUE: list[ModelInfo] = [
     ModelInfo(
         name="gemma-2-2b-it",
         filename="gemma-2-2b-it-Q4_K_M.gguf",
-        hf_repo="TheBloke/gemma-2-2b-it-GGUF",
+        hf_repo="bartowski/gemma-2-2b-it-GGUF",
         hf_file="gemma-2-2b-it-Q4_K_M.gguf",
         context_window=8192,
     ),
     ModelInfo(
         name="gemma-2-9b-it",
         filename="gemma-2-9b-it-Q4_K_M.gguf",
-        hf_repo="TheBloke/gemma-2-9b-it-GGUF",
+        hf_repo="bartowski/gemma-2-9b-it-GGUF",
         hf_file="gemma-2-9b-it-Q4_K_M.gguf",
         context_window=8192,
     ),
