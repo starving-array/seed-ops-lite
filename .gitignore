@@ -208,3 +208,5 @@ ignorefile
 storage/
 *.sqlite*
 
+amdplan.md
+

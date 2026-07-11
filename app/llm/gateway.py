@@ -12,6 +12,7 @@ from typing import Any
 
 from app.core.context.context import get_context
 from app.core.logging.logging import logger
+from app.core.settings.config import settings
 from app.llm.config_resolver import resolve_llm_config, validate_llm_config
 from app.llm.exceptions import LLMProviderError, LLMValidationError
 from app.llm.models import LLMRequest, LLMResponse
@@ -112,11 +113,47 @@ class LLMGateway:
             template_version = None
             timeout = configured_timeout
             retry_count = configured_retries
-            provider_name = configured_provider
+            provider_name = request.provider or configured_provider
+
+        # Auto-routing: if no specific provider was requested, pick the first
+        # available one from the fallback order.  When a model is known to be
+        # available only on a subset of providers, prefer those.
+        auto_routing = getattr(settings, "LLM_AUTO_ROUTING", True)
+        if auto_routing and not provider_name:
+            logger.info(
+                EventID.LLM_REQUEST,
+                "No provider specified — auto-routing to first available provider",
+                component="LLMGateway",
+            )
+            routing_order = _resolve_routing_order(model, fallback_order)
+            for candidate in routing_order:
+                try:
+                    candidate_prov = provider_registry.getProvider(candidate)
+                    if candidate_prov.is_available():
+                        provider_name = candidate
+                        logger.info(
+                            EventID.LLM_REQUEST,
+                            f"Auto-routing selected: {provider_name}",
+                            component="LLMGateway",
+                        )
+                        break
+                    logger.debug(
+                        EventID.LOG_INFO,
+                        f"Skipping unavailable provider in auto-route: {candidate}",
+                    )
+                except Exception:  # noqa: S112
+                    continue
+            if not provider_name:
+                provider_name = fallback_order[0]
+                logger.warning(
+                    EventID.LOG_WARNING,
+                    f"No available provider found — falling back to {provider_name}",
+                    component="LLMGateway",
+                )
 
         # Setup provider list to try:
         # 1. Custom provider if supplied via gateway constructor
-        # 2. Configured provider
+        # 2. Configured / auto-routed provider
         # 3. Fallbacks if failover is enabled
         providers_to_try = []
         if self._provider:
@@ -135,7 +172,13 @@ class LLMGateway:
                 if fallback != provider_name:
                     with contextlib.suppress(Exception):
                         p_inst = provider_registry.getProvider(fallback)
-                        providers_to_try.append((fallback, p_inst))
+                        if p_inst.is_available():
+                            providers_to_try.append((fallback, p_inst))
+                        else:
+                            logger.debug(
+                                EventID.LOG_INFO,
+                                f"Skipping unavailable fallback provider: {fallback}",
+                            )
 
         last_exception = None
         attempt_number = 0
@@ -151,6 +194,10 @@ class LLMGateway:
                     provider_request.model = "claude-3-5-sonnet"
                 elif current_prov_name == "ollama":
                     provider_request.model = "llama3"
+                elif current_prov_name == "fireworks":
+                    provider_request.model = "accounts/fireworks/models/llama-v3p1-8b"
+                elif current_prov_name == "rocm":
+                    provider_request.model = "gemma-2-9b-it"
                 elif current_prov_name in ("google", "gemini", "vertex"):
                     provider_request.model = "gemini-2.5-flash"
 
@@ -402,3 +449,27 @@ class LLMGateway:
         raise last_exception or LLMProviderError(
             "All LLM providers failed to generate content."
         )
+
+
+# ── Model-aware routing ───────────────────────────────────────────────
+
+
+def _resolve_routing_order(
+    model: str,
+    fallback_order: list[str],
+) -> list[str]:
+    """Return providers in priority order for the given model.
+
+    Certain models are only available on a subset of providers.  When such
+    a model is detected the preferred providers are promoted to the front
+    of the list so they are tried first.
+    """
+    model_lower = model.lower()
+
+    # Gemma models: prefer local ROCm, then Fireworks API (hosted Gemma)
+    if "gemma" in model_lower:
+        preferred = ["rocm", "fireworks"]
+        rest = [p for p in fallback_order if p not in preferred]
+        return preferred + rest
+
+    return fallback_order

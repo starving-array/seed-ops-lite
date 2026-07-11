@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   web:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: seedops_lite_web
+    container_name: safeseedops_web
     ports:
       - "8000:8000"
     environment:
@@ -14,16 +12,31 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - LOG_JSON_FORMAT=false
+      # Passthrough from host .env — add keys as needed
+      - LLM_PROVIDER=${LLM_PROVIDER:-google}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - VERTEX_AI_CREDENTIALS_PATH=${VERTEX_AI_CREDENTIALS_PATH:-}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - FIREWORKS_API_KEY=${FIREWORKS_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
     volumes:
-      - ./app:/app/app
       - ./.env:/app/.env
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:8000/health').is_success else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
 
   redis:
     image: redis:7.2-alpine
-    container_name: seedops_lite_redis
+    container_name: safeseedops_redis
     ports:
       - "6379:6379"
     volumes:

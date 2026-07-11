@@ -51,8 +51,11 @@ class Settings(BaseSettings):
     # LLM Gateway Configurations
     LLM_PROVIDER: str = Field(default="google")
     LLM_MODEL: str = Field(default="gemini-2.5-flash")
+    LLM_AUTO_ROUTING: bool = Field(default=True)
     LLM_AUTO_FAILOVER: bool = Field(default=True)
-    LLM_FALLBACK_ORDER: str = Field(default="vertex,gemini,anthropic,openai,ollama")
+    LLM_FALLBACK_ORDER: str = Field(
+        default="vertex,gemini,anthropic,openai,fireworks,rocm,ollama"
+    )
     LLM_MAX_RETRIES: int = Field(default=3)
     LLM_TIMEOUT: float = Field(default=30.0)
     LLM_TEMPERATURE: float = Field(default=0.2)
@@ -74,6 +77,16 @@ class Settings(BaseSettings):
     ANTHROPIC_ENABLED: bool = Field(default=False)
     ANTHROPIC_API_KEY: str | None = Field(default=None)
     ANTHROPIC_MODEL: str | None = Field(default=None)
+
+    # Fireworks AI Provider
+    FIREWORKS_ENABLED: bool = Field(default=False)
+    FIREWORKS_API_KEY: str | None = Field(default=None)
+    FIREWORKS_BASE_URL: str = Field(default="https://api.fireworks.ai/inference/v1")
+    FIREWORKS_MODEL: str = Field(default="accounts/fireworks/models/llama-v3p1-8b")
+
+    # ROCm local inference provider
+    ROCm_ENABLED: bool = Field(default=False)
+    ROCm_MODELS_DIR: str = Field(default="./models/rocm")
 
     # Legacy Aliases (backward compatibility)
     GEMINI_API_KEY: str | None = Field(default=None)
