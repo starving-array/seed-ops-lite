@@ -135,15 +135,18 @@ def check_routing() -> None:
 # ── 6. Live Generation Test ───────────────────────────────────────────
 
 async def check_live_generation() -> None:
-    print("\n  ── 6. Live Generation (via Fireworks) ──")
     try:
+        from app.core.config import settings
+        provider = settings.LLM_PROVIDER or "fireworks"
+        model = settings.LLM_MODEL or ""
+        print(f"\n  ── 6. Live Generation (via {provider}) ──")
         from app.llm.gateway import LLMGateway
         from app.llm.models import LLMRequest
 
         gateway = LLMGateway()
         start = time.perf_counter()
         resp = await gateway.generate(
-            LLMRequest(prompt="Say hello in one word", max_tokens=10, temperature=0.1, provider="fireworks")
+            LLMRequest(prompt="Say hello in one word", max_tokens=10, temperature=0.1, provider=provider, model=model)
         )
         elapsed = time.perf_counter() - start
         check(len(resp.text) > 0, f"Generated response ({elapsed:.1f}s): {resp.text.strip()}")

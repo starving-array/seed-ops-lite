@@ -178,7 +178,7 @@ async def _health(api_url: str) -> dict | None:
 async def _providers(api_url: str) -> list[dict] | None:
     try:
         async with httpx.AsyncClient() as c:
-            r = await c.get(f"{api_url}/api/llm/providers", timeout=5)
+            r = await c.get(f"{api_url}/llm/providers", timeout=5)
             if r.is_success:
                 return r.json()
     except Exception:
@@ -235,7 +235,13 @@ async def main() -> None:
         print("  Cancelled.")
         return
 
-    # Build minimal payload accepted by /api/generate
+    # Build column ID lookup: (table_name, column_name) -> column_id
+    col_id_map: dict[tuple[str, str], str] = {}
+    for i, t in enumerate(schema_def["tables"]):
+        for j, c in enumerate(t["columns"]):
+            col_id_map[(t["name"], c["name"])] = f"c{i}_{j}"
+
+    # Build minimal payload accepted by /schema/generate
     # The API expects schemaState with full table/column/relationship models
     payload = {
         "schemaState": {
@@ -262,9 +268,9 @@ async def main() -> None:
                     "id": f"r{ri}",
                     "name": r["name"],
                     "sourceTableId": f"t{next(i for i, t in enumerate(schema_def['tables']) if t['name'] == r['sourceTable'])}",
-                    "sourceColumnId": f"c{next(i for i, t in enumerate(schema_def['tables']) if t['name'] == r['sourceTable'])}_1",
+                    "sourceColumnId": col_id_map[(r["sourceTable"], r["sourceColumn"])],
                     "targetTableId": f"t{next(i for i, t in enumerate(schema_def['tables']) if t['name'] == r['targetTable'])}",
-                    "targetColumnId": f"c{next(i for i, t in enumerate(schema_def['tables']) if t['name'] == r['targetTable'])}_0",
+                    "targetColumnId": col_id_map[(r["targetTable"], r["targetColumn"])],
                     "type": r["type"],
                     "isRequired": True,
                     "cascadeDelete": r.get("cascadeDelete", False),
@@ -282,7 +288,7 @@ async def main() -> None:
     start = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=600) as client:
-            resp = await client.post(f"{api}/api/generate", json=payload)
+            resp = await client.post(f"{api}/schema/generate", json=payload)
             elapsed = time.perf_counter() - start
 
             if resp.is_success:
@@ -297,7 +303,7 @@ async def main() -> None:
 
                 # Download
                 if input("\n  Download results? (Y/n): ").strip().lower() != "n":
-                    dl_resp = await client.get(f"{api}/api/generate/{wf_id}/download")
+                    dl_resp = await client.get(f"{api}/schema/generate/{wf_id}/download")
                     if dl_resp.is_success:
                         out_dir = Path("./demo_output")
                         out_dir.mkdir(exist_ok=True)
@@ -307,7 +313,7 @@ async def main() -> None:
                         print(f"  Saved to {out_path}")
                     else:
                         # Try preview instead
-                        prev = await client.get(f"{api}/api/generate/{wf_id}/preview")
+                        prev = await client.get(f"{api}/schema/generate/{wf_id}/preview")
                         if prev.is_success:
                             data = prev.json()
                             print("  Preview (first 3 rows per table):")
