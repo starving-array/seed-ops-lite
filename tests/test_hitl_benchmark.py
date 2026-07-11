@@ -1,7 +1,10 @@
 """Performance and scalability benchmarks for the HITL Platform."""
 
-import sqlite3
+import contextlib
+import os
+import tempfile
 import time
+from collections.abc import Generator
 
 import pytest
 
@@ -25,8 +28,15 @@ from app.workflow.execution import CheckpointManager
 
 
 @pytest.fixture(autouse=True)
-def clean_benchmark_state() -> None:
-    """Fixture to ensure database tables are created and clean."""
+def clean_benchmark_state() -> Generator[None, None, None]:
+    """Fixture to ensure database tables are created and clean in an isolated file."""
+    fd, temp_db = tempfile.mkstemp(suffix=".sqlite")
+    os.close(fd)
+
+    original_db_path = sqlite_db_manager.db_path
+    sqlite_db_manager.shutdown()
+    sqlite_db_manager.db_path = temp_db
+    sqlite_db_manager.initialize(run_migrations=True)
     # Ensure tables exist
     CheckpointManager.save_checkpoint(
         execution_id="dummy-benchmark-exec",
@@ -46,20 +56,13 @@ def clean_benchmark_state() -> None:
     _ = InterventionEngine()
     _ = NotificationManager()
 
-    db_path = sqlite_db_manager.db_path
-    conn = sqlite3.connect(db_path)
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM workflow_checkpoints")
-        cursor.execute("DELETE FROM workflow_interventions")
-        cursor.execute("DELETE FROM workflow_notifications")
-        cursor.execute(
-            "CREATE TABLE IF NOT EXISTS approval_sessions (approval_id TEXT PRIMARY KEY, status TEXT)"
-        )
-        cursor.execute("DELETE FROM approval_sessions")
-        conn.commit()
-    finally:
-        conn.close()
+    yield
+
+    sqlite_db_manager.shutdown()
+    sqlite_db_manager.db_path = original_db_path
+
+    with contextlib.suppress(OSError):
+        os.remove(temp_db)  # noqa: PTH107
 
 
 def test_benchmark_approval_creation_performance() -> None:

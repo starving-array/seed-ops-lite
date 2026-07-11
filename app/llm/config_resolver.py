@@ -56,6 +56,14 @@ def resolve_llm_config() -> dict[str, Any]:
             model = "gpt-4o"
         elif provider == "anthropic":
             model = "claude-3-5-sonnet"
+        elif provider == "fireworks":
+            model = getattr(
+                settings,
+                "FIREWORKS_MODEL",
+                "accounts/fireworks/models/llama-v3p1-8b",
+            )
+        elif provider == "rocm":
+            model = "gemma-2-9b-it"
         elif provider == "ollama":
             model = "llama3"
         else:
@@ -91,7 +99,15 @@ def resolve_llm_config() -> dict[str, Any]:
         else:
             auto_failover = str(env_failover).lower() == "true"
 
-    fallback_order_list = ["vertex", "gemini", "anthropic", "openai", "ollama"]
+    fallback_order_list = [
+        "vertex",
+        "gemini",
+        "anthropic",
+        "openai",
+        "fireworks",
+        "rocm",
+        "ollama",
+    ]
     fallback_order_str = db_fallback_order or getattr(
         settings, "LLM_FALLBACK_ORDER", None
     )
@@ -122,7 +138,9 @@ def resolve_llm_config() -> dict[str, Any]:
         api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
     elif provider == "azure":
         api_key = getattr(settings, "AZURE_OPENAI_API_KEY", None)
-    elif provider == "ollama":
+    elif provider == "fireworks":
+        api_key = getattr(settings, "FIREWORKS_API_KEY", None)
+    elif provider in ("rocm", "ollama"):
         api_key = "local"
 
     return {
@@ -196,6 +214,12 @@ def validate_llm_config(config: dict[str, Any]) -> None:
             )
             if not proj or not loc:
                 valid = False
+        elif provider == "fireworks":
+            key = config.get("api_key") or getattr(settings, "FIREWORKS_API_KEY", None)
+            if not key:
+                valid = False
+        elif provider == "rocm":
+            pass  # No API key needed — local inference
         elif provider == "ollama":
             pass
         elif not config.get("api_key"):

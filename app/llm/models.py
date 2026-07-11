@@ -31,6 +31,11 @@ class LLMRequest(BaseModel):
         default=False,
         description="If True, forces the response format to be structured JSON.",
     )
+    provider: str | None = Field(
+        default=None,
+        description="Optional provider name override (e.g. 'fireworks', 'rocm', 'gemini')."
+        " Uses configured provider when not set.",
+    )
 
 
 class LLMResponse(BaseModel):
