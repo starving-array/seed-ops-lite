@@ -74,7 +74,7 @@ class TestModelManager:
         info = get_model_info("gemma-2-9b-it")
         assert info is not None
         assert info.filename == "gemma-2-9b-it-Q4_K_M.gguf"
-        assert info.hf_repo == "TheBloke/gemma-2-9b-it-GGUF"
+        assert info.hf_repo == "bartowski/gemma-2-9b-it-GGUF"
 
     def test_download_url_format(self) -> None:
         from app.llm.model_manager import download_url, get_model_info
