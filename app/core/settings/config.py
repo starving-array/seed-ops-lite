@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     FIREWORKS_ENABLED: bool = Field(default=False)
     FIREWORKS_API_KEY: str | None = Field(default=None)
     FIREWORKS_BASE_URL: str = Field(default="https://api.fireworks.ai/inference/v1")
-    FIREWORKS_MODEL: str = Field(default="accounts/fireworks/models/llama-v3p1-8b")
+    FIREWORKS_MODEL: str = Field(default="accounts/fireworks/models/llama-v3p1-8b-instruct")
 
     # ROCm local inference provider
     ROCm_ENABLED: bool = Field(default=False)
