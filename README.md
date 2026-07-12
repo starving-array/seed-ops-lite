@@ -1,7 +1,7 @@
 ---
 title: SafeSeedOps Lite
 emoji: 🔐
-colorFrom: navy
+colorFrom: indigo
 colorTo: red
 sdk: gradio
 app_file: app.py
