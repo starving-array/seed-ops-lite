@@ -123,6 +123,8 @@ class GeminiProvider(LLMProvider):
         ]
 
     def is_available(self) -> bool:
+        if not getattr(settings, "GOOGLE_ENABLED", True):
+            return False
         key = getattr(settings, "GOOGLE_API_KEY", None) or getattr(
             settings, "GEMINI_API_KEY", None
         )
@@ -1346,7 +1348,7 @@ class FireworksProvider(LLMProvider):
 
     def supported_models(self) -> list[str]:
         return [
-            "accounts/fireworks/models/llama-v3p1-8b",
+            "accounts/fireworks/models/llama-v3p1-8b-instruct",
             "accounts/fireworks/models/llama-v3p1-405b-instruct",
             "accounts/fireworks/models/gemma2-9b",
             "accounts/fireworks/models/mixtral-8x22b-instruct",
@@ -1438,7 +1440,7 @@ class FireworksProvider(LLMProvider):
             or getattr(
                 settings,
                 "FIREWORKS_MODEL",
-                "accounts/fireworks/models/llama-v3p1-8b",
+                "accounts/fireworks/models/llama-v3p1-8b-instruct",
             )
         )
 

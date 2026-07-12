@@ -20,6 +20,8 @@ from app.core.logging.logging import configure_logging
 
 configure_logging()
 
+from typing import cast
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from gradio import mount_gradio_app
@@ -200,16 +202,17 @@ def create_app() -> FastAPI:
     Returns:
         FastAPI: The configured FastAPI application with Gradio UI.
     """
-    app = create_api_app()
-    app = mount_gradio_app(
-        app,
-        create_gradio_app(),
-        path="/",
-        theme=SoftTheme(primary_hue="red"),
-        css=GRADIO_CSS,
-        show_error=True,
+    return cast(
+        FastAPI,
+        mount_gradio_app(
+            create_api_app(),
+            create_gradio_app(),
+            path="/",
+            theme=SoftTheme(primary_hue="red"),
+            css=GRADIO_CSS,
+            show_error=True,
+        ),
     )
-    return app
 
 
 app = create_app()
