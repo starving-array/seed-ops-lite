@@ -9,6 +9,8 @@ colorTo: red
 
 > **Live Demo:** [seed-ops-lite.onrender.com](https://seed-ops-lite.onrender.com) — React frontend at `/`, Gradio UI at `/gradio/`
 
+![SafeSeedOps Lite](cover.png)
+
 SafeSeedOps Lite is an enterprise-grade synthetic relational database generator using a multi-agent architecture — **winner of the AMD Developer Hackathon 2026 Track 3 (Unicorn)**. This project provides the backend foundation, schema visualizer, and relational synthesis suites with native AMD ROCm support.
 
 ---
