@@ -215,9 +215,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         is_llm = path.startswith("/llm") or path.startswith("/schema/generate")
 
         max_req = (
-            settings.RATE_LIMIT_LLM_REQUESTS
-            if is_llm
-            else settings.RATE_LIMIT_REQUESTS
+            settings.RATE_LIMIT_LLM_REQUESTS if is_llm else settings.RATE_LIMIT_REQUESTS
         )
         window = (
             settings.RATE_LIMIT_LLM_WINDOW_SECONDS
