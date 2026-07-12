@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from pathlib import Path
 from abc import ABC, abstractmethod
 from datetime import UTC
 from enum import Enum
@@ -101,6 +102,7 @@ class WorkflowRepository(ABC):
 def init_persistence_tables() -> None:
     """Initializes schema and audit logging tables in SQLite."""
     db_path = sqlite_db_manager.db_path
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     try:
         cursor = conn.cursor()
