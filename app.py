@@ -1,26 +1,41 @@
-"""HF Spaces Gradio SDK entry point.
+"""HF Spaces / Render entry point.
 
-Starts the FastAPI API server in a background thread,
-then launches the Gradio UI as the main process.
+Serves the React frontend at /, Gradio UI at /gradio,
+and API routes under /api/, /health, /schema/, etc.
+All on a single port.
 """
 
 import os
-import threading
+from pathlib import Path
 
-os.environ["API_BASE_URL"] = "http://127.0.0.1:8000"
+os.environ["API_BASE_URL"] = ""
 
 import uvicorn
+from fastapi.staticfiles import StaticFiles
+from gradio import mount_gradio_app
+from gradio.themes import Soft as SoftTheme
+
 from app.main import create_api_app
-from app.ui.gradio_app import create_gradio_app
+from app.ui.gradio_app import GRADIO_CSS, create_gradio_app
 
-fastapi_app = create_api_app()
-server = threading.Thread(
-    target=uvicorn.run,
-    args=(fastapi_app,),
-    kwargs={"host": "127.0.0.1", "port": 8000, "log_level": "info"},
-    daemon=True,
+# FastAPI with API routes
+app = create_api_app()
+
+# Mount Gradio UI at /gradio
+gradio_app = create_gradio_app()
+app = mount_gradio_app(
+    app,
+    gradio_app,
+    path="/gradio",
+    theme=SoftTheme(primary_hue="red"),
+    css=GRADIO_CSS,
+    show_error=True,
 )
-server.start()
 
-app = create_gradio_app()
-app.launch(server_name="0.0.0.0", ssr_mode=False)
+# Serve React frontend at /
+frontend_dist = Path(__file__).parent / "frontend" / "dist"
+if frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=7860)
