@@ -23,4 +23,4 @@ server = threading.Thread(
 server.start()
 
 app = create_gradio_app()
-app.launch(server_name="0.0.0.0")
+app.launch(server_name="0.0.0.0", ssr_mode=False)
