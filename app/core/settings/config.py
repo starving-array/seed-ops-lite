@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     ROCm_ENABLED: bool = Field(default=False)
     ROCm_MODELS_DIR: str = Field(default="./models/rocm")
 
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = Field(default=True)
+    RATE_LIMIT_REQUESTS: int = Field(default=60)
+    RATE_LIMIT_WINDOW_SECONDS: int = Field(default=60)
+    RATE_LIMIT_LLM_REQUESTS: int = Field(default=10)
+    RATE_LIMIT_LLM_WINDOW_SECONDS: int = Field(default=60)
+
     # Legacy Aliases (backward compatibility)
     GEMINI_API_KEY: str | None = Field(default=None)
     GEMINI_MODEL: str = Field(default="gemini-2.5-flash")

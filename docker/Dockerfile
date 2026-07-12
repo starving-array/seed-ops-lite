@@ -16,19 +16,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /build
 
 COPY pyproject.toml uv.lock* ./
 
 # Install only production dependencies
-RUN uv sync --frozen --no-dev --no-install-project
+RUN /root/.cargo/bin/uv sync --frozen --no-dev --no-install-project
 
 # ==============================================================================
 # Stage 2 — Runtime (CPU)
 # ==============================================================================
 FROM python:3.12-slim AS runner
+
+LABEL org.opencontainers.image.source=https://github.com/starving-array/seed-ops-lite
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -57,4 +59,4 @@ EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD python -c "import httpx; r = httpx.get('http://localhost:${PORT}/health'); exit(0 if r.is_success else 1)"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

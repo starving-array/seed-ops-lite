@@ -30,6 +30,7 @@ from app.core.middleware.middleware import (
     CorrelationIdMiddleware,
     ExceptionLoggingMiddleware,
     ProjectMiddleware,
+    RateLimitMiddleware,
 )
 from app.core.settings.config import settings
 from app.core.version import APP_VERSION
@@ -180,6 +181,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Rate limiting — applied to all API routes
+    app.add_middleware(RateLimitMiddleware)
 
     # Include routers
     app.include_router(api_router)
