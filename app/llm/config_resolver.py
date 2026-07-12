@@ -57,11 +57,7 @@ def resolve_llm_config() -> dict[str, Any]:
         elif provider == "anthropic":
             model = "claude-3-5-sonnet"
         elif provider == "fireworks":
-            model = getattr(
-                settings,
-                "FIREWORKS_MODEL",
-                "accounts/fireworks/models/llama-v3p1-8b",
-            )
+            model = settings.FIREWORKS_MODEL
         elif provider == "rocm":
             model = "gemma-2-9b-it"
         elif provider == "ollama":

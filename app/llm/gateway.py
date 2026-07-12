@@ -195,7 +195,7 @@ class LLMGateway:
                 elif current_prov_name == "ollama":
                     provider_request.model = "llama3"
                 elif current_prov_name == "fireworks":
-                    provider_request.model = "accounts/fireworks/models/llama-v3p1-8b"
+                    provider_request.model = settings.FIREWORKS_MODEL
                 elif current_prov_name == "rocm":
                     provider_request.model = "gemma-2-9b-it"
                 elif current_prov_name in ("google", "gemini", "vertex"):
