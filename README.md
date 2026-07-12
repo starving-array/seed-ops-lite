@@ -1,9 +1,3 @@
----
-title: SafeSeedOps Lite
-emoji: 🔐
-colorFrom: indigo
-colorTo: red
----
 
 # SafeSeedOps Lite
 
