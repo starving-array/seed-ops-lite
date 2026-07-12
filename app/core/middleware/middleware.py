@@ -1,8 +1,11 @@
-"""Middleware modules for tracking correlation IDs and logging/exception handling."""
+"""Middleware modules for tracking correlation IDs, logging/exception handling, and rate limiting."""
 
 import time
 import uuid
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from threading import Lock
+from typing import Any
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -167,4 +170,72 @@ class ProjectMiddleware(BaseHTTPMiddleware):
 
         project_id = request.headers.get("x-project-id", "default")
         ProjectResolver.set_active_project_id(project_id)
+        return await call_next(request)
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Token-bucket rate limiter applied to all API endpoints.
+
+    General API: 60 requests per 60-second window per IP.
+    LLM endpoints (/llm, /schema/generate): 10 requests per 60-second window per IP.
+    Health check is exempt.
+    """
+
+    def __init__(self, app: Any) -> None:
+        super().__init__(app)
+        self._buckets: dict[str, list[float]] = defaultdict(list)
+        self._lock = Lock()
+
+    def _is_rate_limited(self, ip: str, max_requests: int, window: int) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            timestamps = self._buckets[ip]
+            cutoff = now - window
+            timestamps[:] = [t for t in timestamps if t > cutoff]
+            if len(timestamps) >= max_requests:
+                return True
+            timestamps.append(now)
+            return False
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        from app.core.settings.config import settings
+
+        if not settings.RATE_LIMIT_ENABLED:
+            return await call_next(request)
+
+        path = request.url.path
+
+        if path == "/health":
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "unknown"
+
+        is_llm = path.startswith("/llm") or path.startswith("/schema/generate")
+
+        max_req = (
+            settings.RATE_LIMIT_LLM_REQUESTS
+            if is_llm
+            else settings.RATE_LIMIT_REQUESTS
+        )
+        window = (
+            settings.RATE_LIMIT_LLM_WINDOW_SECONDS
+            if is_llm
+            else settings.RATE_LIMIT_WINDOW_SECONDS
+        )
+
+        if self._is_rate_limited(f"{client_ip}:{path}", max_req, window):
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "success": False,
+                    "error": {
+                        "type": "RateLimitExceeded",
+                        "message": f"Rate limit exceeded. Max {max_req} requests per {window}s.",
+                    },
+                },
+                headers={"Retry-After": str(window)},
+            )
+
         return await call_next(request)
