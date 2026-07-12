@@ -5,6 +5,7 @@ colorFrom: indigo
 colorTo: red
 sdk: gradio
 app_file: app.py
+hardware: cpu-basic
 ---
 
 # SafeSeedOps Lite
