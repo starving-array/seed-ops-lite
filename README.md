@@ -3,12 +3,11 @@ title: SafeSeedOps Lite
 emoji: 🔐
 colorFrom: indigo
 colorTo: red
-sdk: gradio
-app_file: app.py
-hardware: cpu-basic
 ---
 
 # SafeSeedOps Lite
+
+> **Live Demo:** [seed-ops-lite.onrender.com](https://seed-ops-lite.onrender.com) — React frontend at `/`, Gradio UI at `/gradio/`
 
 SafeSeedOps Lite is an enterprise-grade synthetic relational database generator using a multi-agent architecture — **winner of the AMD Developer Hackathon 2026 Track 3 (Unicorn)**. This project provides the backend foundation, schema visualizer, and relational synthesis suites with native AMD ROCm support.
 
@@ -219,28 +218,32 @@ docker build -t safeseedops:rocm -f docker/Dockerfile.rocm .
 docker run -p 8000:8000 --env-file .env --device=/dev/kfd --device=/dev/dri safeseedops:rocm
 ```
 
-### Hugging Face Spaces
+### Render (Recommended)
 
-Push to a Hugging Face Space with Docker SDK — the `sdk: docker` frontmatter in this README is picked up automatically. The Space auto-deploys from your GitHub repository on every push.
+Deploy on Render's free tier — auto-deploys from GitHub on every push.
 
-1. Create a Space at [huggingface.co/spaces](https://huggingface.co/spaces)
-2. Select **Docker** as the SDK
-3. Connect your GitHub repository
-4. The Space reads `app_port: 8000` from the frontmatter and serves the API
+1. Go to [dashboard.render.com](https://dashboard.render.com) → **New Web Service**
+2. Connect your GitHub repository, branch `hf-gradio-sdk`
+3. Set:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `python app.py`
+4. Add environment variables (see table below)
+5. Deploy — the app is live in ~3 minutes at `https://<name>.onrender.com`
 
 ### Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `FIREWORKS_API_KEY` | Yes* | — | Fireworks AI API key |
-| `GEMINI_API_KEY` | No | — | Google Gemini API key (fallback) |
+| `GOOGLE_API_KEY` | Yes* | — | Google Gemini API key (primary) |
+| `FIREWORKS_API_KEY` | No | — | Fireworks AI API key |
+| `GEMINI_API_KEY` | No | — | Alias for `GOOGLE_API_KEY` |
 | `OPENAI_API_KEY` | No | — | OpenAI API key (fallback) |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API key (fallback) |
 | `DATABASE_URL` | No | `sqlite:///data/safeseedops.db` | Database connection string |
 | `REDIS_URL` | No | — | Redis URL for caching |
 | `LOG_LEVEL` | No | `INFO` | Logging level |
 
-\* Required unless using local ROCm inference exclusively.
+\* At least one API key required.
 
 ---
 
