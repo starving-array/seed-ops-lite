@@ -154,8 +154,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
 
-def create_app() -> FastAPI:
-    """Creates and configures the FastAPI application instance.
+def create_api_app() -> FastAPI:
+    """Creates the FastAPI application with API routes only (no Gradio UI).
 
     Returns:
         FastAPI: The configured FastAPI application.
@@ -194,13 +194,22 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+def create_app() -> FastAPI:
+    """Creates the full application with Gradio UI mounted (for Docker deployment).
 
-app = mount_gradio_app(
-    app,
-    create_gradio_app(),
-    path="/",
-    theme=SoftTheme(primary_hue="red"),
-    css=GRADIO_CSS,
-    show_error=True,
-)
+    Returns:
+        FastAPI: The configured FastAPI application with Gradio UI.
+    """
+    app = create_api_app()
+    app = mount_gradio_app(
+        app,
+        create_gradio_app(),
+        path="/",
+        theme=SoftTheme(primary_hue="red"),
+        css=GRADIO_CSS,
+        show_error=True,
+    )
+    return app
+
+
+app = create_app()

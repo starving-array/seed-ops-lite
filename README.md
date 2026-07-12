@@ -3,8 +3,8 @@ title: SafeSeedOps Lite
 emoji: 🔐
 colorFrom: navy
 colorTo: red
-sdk: docker
-app_port: 8000
+sdk: gradio
+app_file: app.py
 ---
 
 # SafeSeedOps Lite

@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from typing import Any
 import gradio as gr
 import httpx
 
-API_BASE = ""
+API_BASE = os.environ.get("API_BASE_URL", "")
 
 DEMO_SCHEMAS: dict[str, Any] = {
     "e-commerce": {
