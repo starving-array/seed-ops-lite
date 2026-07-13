@@ -202,11 +202,16 @@ def create_app() -> FastAPI:
     """
     app = create_api_app()
 
-    frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    project_root = Path(__file__).resolve().parent.parent
+    frontend_public = project_root / "frontend" / "public"
+    frontend_dist = project_root / "frontend" / "dist"
 
     # Serve landing page at /
     @app.get("/", response_class=FileResponse)
     async def landing() -> FileResponse:
+        landing_file = frontend_public / "index-landing.html"
+        if landing_file.exists():
+            return FileResponse(str(landing_file))
         return FileResponse(str(frontend_dist / "index-landing.html"))
 
     # Serve React SPA at /app (catch-all for client-side routing)
