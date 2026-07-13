@@ -19,6 +19,7 @@ dependencies = [
     "requests>=2.34.2",
     "python-multipart>=0.0.32",
     "gradio>=6.20.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
