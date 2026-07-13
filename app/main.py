@@ -20,8 +20,12 @@ from app.core.logging.logging import configure_logging
 
 configure_logging()
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.core.lifecycle.redis import redis_manager
@@ -192,12 +196,35 @@ def create_api_app() -> FastAPI:
 
 
 def create_app() -> FastAPI:
-    """Creates the FastAPI application without Gradio UI.
+    """Creates the FastAPI application with landing page and frontend serving.
 
     Returns:
         FastAPI: The configured FastAPI application.
     """
-    return create_api_app()
+    app = create_api_app()
+
+    # Serve landing page at /
+    @app.get("/", response_class=FileResponse)
+    async def landing() -> FileResponse:
+        return FileResponse(
+            str(
+                Path(__file__).resolve().parent.parent
+                / "frontend"
+                / "dist"
+                / "index-landing.html"
+            )
+        )
+
+    # Serve React frontend at /app
+    frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    if frontend_dist.is_dir():
+        app.mount(
+            "/app",
+            StaticFiles(directory=str(frontend_dist), html=True),
+            name="frontend",
+        )
+
+    return app
 
 
 app = create_app()
