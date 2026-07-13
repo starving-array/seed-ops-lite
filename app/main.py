@@ -197,22 +197,12 @@ def create_api_app() -> FastAPI:
 
 
 def create_app() -> FastAPI:
-    """Creates the full application with Gradio UI mounted (for Docker deployment).
+    """Creates the FastAPI application without Gradio UI.
 
     Returns:
-        FastAPI: The configured FastAPI application with Gradio UI.
+        FastAPI: The configured FastAPI application.
     """
-    return cast(
-        FastAPI,
-        mount_gradio_app(
-            create_api_app(),
-            create_gradio_app(),
-            path="/",
-            theme=SoftTheme(primary_hue="red"),
-            css=GRADIO_CSS,
-            show_error=True,
-        ),
-    )
+    return create_api_app()
 
 
 app = create_app()
