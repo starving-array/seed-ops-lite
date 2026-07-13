@@ -24,8 +24,6 @@ from typing import cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from gradio import mount_gradio_app
-from gradio.themes import Soft as SoftTheme
 
 from app.api.router import api_router
 from app.core.lifecycle.redis import redis_manager
@@ -39,7 +37,6 @@ from app.core.middleware.middleware import (
 from app.core.settings.config import settings
 from app.core.version import APP_VERSION
 from app.telemetry.events import EventID
-from app.ui.gradio_app import GRADIO_CSS, create_gradio_app
 
 
 @asynccontextmanager
@@ -157,7 +154,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_api_app() -> FastAPI:
-    """Creates the FastAPI application with API routes only (no Gradio UI).
+    """Creates the FastAPI application with API routes only.
 
     Returns:
         FastAPI: The configured FastAPI application.
@@ -197,22 +194,12 @@ def create_api_app() -> FastAPI:
 
 
 def create_app() -> FastAPI:
-    """Creates the full application with Gradio UI mounted (for Docker deployment).
+    """Creates the FastAPI application without Gradio UI.
 
     Returns:
-        FastAPI: The configured FastAPI application with Gradio UI.
+        FastAPI: The configured FastAPI application.
     """
-    return cast(
-        FastAPI,
-        mount_gradio_app(
-            create_api_app(),
-            create_gradio_app(),
-            path="/",
-            theme=SoftTheme(primary_hue="red"),
-            css=GRADIO_CSS,
-            show_error=True,
-        ),
-    )
+    return create_api_app()
 
 
 app = create_app()
