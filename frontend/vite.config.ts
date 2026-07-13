@@ -12,24 +12,22 @@ export default defineConfig(({ mode }) => ({
     {
       name: 'landing-page',
       configureServer(server) {
-        return () => {
-          server.middlewares.use((req, res, next) => {
-            const url = req.url ?? ''
-            if (url.startsWith('/app')) {
-              req.url = '/index.html'
-              return next()
+        server.middlewares.use((req, res, next) => {
+          const url = req.url ?? ''
+          if (url.startsWith('/app')) {
+            req.url = '/index.html'
+            return next()
+          }
+          if (url === '/' || url === '' || url === '/index.html') {
+            if (existsSync(landingPath)) {
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'text/html')
+              res.end(readFileSync(landingPath, 'utf-8'))
+              return
             }
-            if (url === '/' || url === '' || url === '/index.html') {
-              if (existsSync(landingPath)) {
-                res.statusCode = 200
-                res.setHeader('Content-Type', 'text/html')
-                res.end(readFileSync(landingPath, 'utf-8'))
-                return
-              }
-            }
-            next()
-          })
-        }
+          }
+          next()
+        })
       },
     },
   ],
