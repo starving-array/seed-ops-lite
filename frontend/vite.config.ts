@@ -14,11 +14,12 @@ export default defineConfig(({ mode }) => ({
       configureServer(server) {
         return () => {
           server.middlewares.use((req, res, next) => {
-            if (req.url.startsWith('/app')) {
+            const url = req.url ?? ''
+            if (url.startsWith('/app')) {
               req.url = '/index.html'
               return next()
             }
-            if (req.url === '/' || req.url === '' || req.url === '/index.html') {
+            if (url === '/' || url === '' || url === '/index.html') {
               if (existsSync(landingPath)) {
                 res.statusCode = 200
                 res.setHeader('Content-Type', 'text/html')
