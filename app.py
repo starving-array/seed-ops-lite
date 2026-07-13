@@ -1,7 +1,7 @@
-"""HF Spaces / Render entry point.
+"""Render entry point.
 
-Serves the React frontend at /, Gradio UI at /gradio,
-and API routes under /api/, /health, /schema/, etc.
+Serves the FastAPI application with React frontend at / and
+API routes under /api/, /health, /schema/, etc.
 All on a single port.
 """
 
@@ -12,25 +12,11 @@ os.environ["API_BASE_URL"] = ""
 
 import uvicorn
 from fastapi.staticfiles import StaticFiles
-from gradio import mount_gradio_app
-from gradio.themes import Soft as SoftTheme
 
 from app.main import create_api_app
-from app.ui.gradio_app import GRADIO_CSS, create_gradio_app
 
 # FastAPI with API routes
 app = create_api_app()
-
-# Mount Gradio UI at /gradio
-gradio_app = create_gradio_app()
-app = mount_gradio_app(
-    app,
-    gradio_app,
-    path="/gradio",
-    theme=SoftTheme(primary_hue="red"),
-    css=GRADIO_CSS,
-    show_error=True,
-)
 
 # Serve React frontend at /
 frontend_dist = Path(__file__).parent / "frontend" / "dist"
