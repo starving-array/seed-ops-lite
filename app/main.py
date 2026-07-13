@@ -20,8 +20,6 @@ from app.core.logging.logging import configure_logging
 
 configure_logging()
 
-from typing import cast
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

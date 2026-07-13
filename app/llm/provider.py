@@ -1353,6 +1353,7 @@ class FireworksProvider(LLMProvider):
             "accounts/fireworks/models/glm-5p2",
             "accounts/fireworks/models/gpt-oss-120b",
             "accounts/fireworks/models/kimi-k2p6",
+            "accounts/fireworks/models/gemma2-9b",
         ]
 
     def is_available(self) -> bool:
@@ -1436,10 +1437,7 @@ class FireworksProvider(LLMProvider):
         base_url = getattr(
             settings, "FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1"
         )
-        model = str(
-            request.model
-            or settings.FIREWORKS_MODEL
-        )
+        model = str(request.model or settings.FIREWORKS_MODEL)
 
         messages: list[dict[str, str]] = []
         if request.system_instruction:
