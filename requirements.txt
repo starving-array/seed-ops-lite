@@ -20,3 +20,4 @@ structlog
 typer
 uvicorn
 websockets
+pyyaml
