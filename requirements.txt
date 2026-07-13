@@ -1,7 +1,6 @@
 alembic
 cryptography
 fastapi
-gradio
 google-auth
 hiredis
 httpx

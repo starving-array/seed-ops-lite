@@ -1,7 +1,8 @@
 
+
 # SafeSeedOps Lite
 
-> **Live Demo:** [seed-ops-lite.onrender.com](https://seed-ops-lite.onrender.com) — React frontend at `/`, Gradio UI at `/gradio/`
+> **Live Demo:** [seed-ops-lite.onrender.com](https://seed-ops-lite.onrender.com)
 
 ![SafeSeedOps Lite](cover.png)
 
