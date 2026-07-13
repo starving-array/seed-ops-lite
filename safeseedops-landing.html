@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeSeedOps Lite — Privacy-First Synthetic Database Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:   #080E1A;
+      --navy:    #0D1F35;
+      --navy2:   #1A2E4A;
+      --cyan:    #00E5FF;
+      --cyan-dim:#00B4CC;
+      --amber:   #FF9F0A;
+      --green:   #34C759;
+      --red:     #FF3B30;
+      --white:   #F8FAFC;
+      --offwhite:#EFF4FA;
+      --gray:    #64748B;
+      --lgray:   #94A3B8;
+      --card-border: rgba(0,229,255,0.12);
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-body:    'Inter', sans-serif;
+      --font-mono:    'JetBrains Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font-body); background: var(--white); color: #1E293B; line-height: 1.6; overflow-x: hidden; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 5%; height: 64px;
+      background: rgba(8,14,26,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(0,229,255,0.1);
+    }
+    .nav-brand {
+      font-family: var(--font-display); font-size: 1.15rem; font-weight: 700;
+      color: var(--white); letter-spacing: -0.02em;
+    }
+    .nav-brand span { color: var(--cyan); }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a {
+      color: var(--lgray); text-decoration: none; font-size: 0.875rem;
+      font-weight: 500; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white); }
+    .btn-nav {
+      background: var(--cyan); color: var(--black); padding: 0.5rem 1.25rem;
+      border-radius: 6px; font-weight: 600; font-size: 0.875rem;
+      text-decoration: none; transition: opacity 0.2s;
+    }
+    .btn-nav:hover { opacity: 0.88; }
+
+    /* ── HERO ── */
+    #hero {
+      min-height: 100vh; background: var(--black);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center;
+      padding: 6rem 5% 5rem; position: relative; overflow: hidden;
+    }
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.04) 1px, transparent 1px);
+      background-size: 64px 64px;
+      animation: grid-drift 20s linear infinite;
+    }
+    @keyframes grid-drift { from { transform: translateY(0); } to { transform: translateY(64px); } }
+    .hero-glow {
+      position: absolute; top: 30%; left: 50%; transform: translate(-50%,-50%);
+      width: 600px; height: 400px;
+      background: radial-gradient(ellipse, rgba(0,229,255,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.25);
+      color: var(--cyan); font-size: 0.8rem; font-weight: 600;
+      padding: 0.35rem 1rem; border-radius: 100px; margin-bottom: 2rem;
+      letter-spacing: 0.06em; text-transform: uppercase; position: relative;
+    }
+    .eyebrow-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--cyan); animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
+    .hero-q {
+      font-family: var(--font-display); font-size: clamp(2.8rem,6vw,5.2rem);
+      font-weight: 700; color: var(--white); line-height: 1.08;
+      letter-spacing: -0.03em; margin-bottom: 1.5rem; position: relative;
+    }
+    .hero-q .accent { color: var(--cyan); }
+    .hero-sub {
+      font-size: clamp(1rem,2vw,1.2rem); color: var(--lgray);
+      max-width: 640px; margin: 0 auto 2.5rem; line-height: 1.7;
+      position: relative;
+    }
+    .hero-ctas { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; position: relative; }
+    .btn-primary {
+      background: var(--cyan); color: var(--black);
+      padding: 0.85rem 2rem; border-radius: 8px;
+      font-weight: 700; font-size: 1rem; text-decoration: none;
+      font-family: var(--font-display);
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 0 0 0 rgba(0,229,255,0);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,229,255,0.35); }
+    .btn-ghost {
+      background: transparent; color: var(--white);
+      padding: 0.85rem 2rem; border-radius: 8px;
+      font-weight: 600; font-size: 1rem; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--cyan); background: rgba(0,229,255,0.06); }
+    .hero-stats {
+      display: flex; gap: 3rem; justify-content: center;
+      margin-top: 4rem; flex-wrap: wrap; position: relative;
+    }
+    .hero-stat { text-align: center; }
+    .hero-stat-val {
+      font-family: var(--font-display); font-size: 2.2rem;
+      font-weight: 700; color: var(--cyan); line-height: 1;
+    }
+    .hero-stat-lbl { font-size: 0.8rem; color: var(--lgray); margin-top: 0.35rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .hero-stat-divider { width: 1px; background: rgba(255,255,255,0.08); align-self: stretch; }
+
+    /* ── SHARED SECTION STYLES ── */
+    section { padding: 6rem 5%; }
+    .section-dark { background: var(--black); }
+    .section-navy { background: var(--navy); }
+    .section-light { background: var(--white); }
+    .section-tint { background: var(--offwhite); }
+    .section-label {
+      display: inline-block; font-size: 0.75rem; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--cyan); margin-bottom: 1rem;
+    }
+    .section-label-dark { color: var(--cyan-dim); }
+    .section-title {
+      font-family: var(--font-display); font-size: clamp(2rem, 3.5vw, 2.8rem);
+      font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;
+      margin-bottom: 1rem;
+    }
+    .section-title-light { color: var(--white); }
+    .section-title-dark  { color: #1E293B; }
+    .section-sub { font-size: 1.05rem; color: var(--gray); max-width: 600px; line-height: 1.7; }
+    .section-sub-light { color: var(--lgray); }
+    .section-header { margin-bottom: 3.5rem; }
+    .max-w { max-width: 1160px; margin: 0 auto; }
+
+    /* ── PROBLEM ── */
+    .problem-stats {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 2px; background: #E2E8F0; border-radius: 16px; overflow: hidden;
+      margin-bottom: 3rem;
+    }
+    .problem-stat {
+      background: var(--white); padding: 2.5rem 2rem; text-align: center;
+    }
+    .problem-stat-num {
+      font-family: var(--font-display); font-size: 3.2rem; font-weight: 700;
+      line-height: 1; margin-bottom: 0.5rem;
+    }
+    .problem-stat-num.red  { color: #EF4444; }
+    .problem-stat-num.amber{ color: var(--amber); }
+    .problem-stat-num.navy { color: #1E3A5F; }
+    .problem-stat-lbl { font-size: 0.9rem; color: var(--gray); line-height: 1.5; max-width: 180px; margin: 0 auto; }
+    .problem-cards {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 1.5rem;
+    }
+    .problem-card {
+      border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.75rem;
+    }
+    .problem-icon { font-size: 1.8rem; margin-bottom: 1rem; }
+    .problem-card h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #1E293B; }
+    .problem-card p { font-size: 0.9rem; color: var(--gray); line-height: 1.6; }
+
+    /* ── HOW IT WORKS (pipeline) ── */
+    .pipeline {
+      display: flex; align-items: flex-start; gap: 0;
+      justify-content: center; flex-wrap: nowrap; overflow-x: auto;
+      padding-bottom: 1rem;
+    }
+    .pipeline-step {
+      flex: 1; min-width: 160px; max-width: 200px;
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center; position: relative;
+    }
+    .pipeline-step + .pipeline-step::before {
+      content: '';
+      position: absolute; top: 36px; left: -50%;
+      width: 100%; height: 2px;
+      background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    }
+    .pipeline-node {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: 2px solid var(--card-border);
+      background: var(--navy2); display: flex; align-items: center;
+      justify-content: center; font-size: 1.6rem; margin-bottom: 1rem;
+      position: relative; z-index: 1; transition: border-color 0.2s, transform 0.2s;
+    }
+    .pipeline-step:hover .pipeline-node {
+      border-color: var(--cyan); transform: scale(1.1);
+    }
+    .pipeline-step-name {
+      font-family: var(--font-display); font-size: 0.85rem; font-weight: 600;
+      color: var(--white); margin-bottom: 0.4rem;
+    }
+    .pipeline-step-desc { font-size: 0.78rem; color: var(--lgray); line-height: 1.5; padding: 0 0.5rem; }
+    .pipeline-badge {
+      display: inline-block; font-size: 0.68rem; font-weight: 600;
+      padding: 0.2rem 0.6rem; border-radius: 100px; margin-top: 0.6rem;
+      background: rgba(0,229,255,0.12); color: var(--cyan);
+    }
+    .pipeline-badge.amber { background: rgba(255,159,10,0.15); color: var(--amber); }
+    .pipeline-badge.green { background: rgba(52,199,89,0.15); color: var(--green); }
+
+    /* ── ARCHITECTURE DIAGRAM ── */
+    .arch-wrap {
+      background: var(--navy); border: 1px solid var(--card-border);
+      border-radius: 20px; padding: 2.5rem;
+      max-width: 900px; margin: 0 auto;
+    }
+    .arch-diagram { width: 100%; display: flex; flex-direction: column; gap: 1rem; }
+    .arch-row { display: flex; align-items: center; gap: 1rem; }
+    .arch-box {
+      flex: 1; border-radius: 10px; padding: 1rem 1.25rem;
+      border: 1px solid rgba(255,255,255,0.08); cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      position: relative; overflow: hidden;
+    }
+    .arch-box:hover { transform: translateY(-2px); }
+    .arch-box.cyan { background: rgba(0,229,255,0.07); border-color: rgba(0,229,255,0.3); }
+    .arch-box.cyan:hover { background: rgba(0,229,255,0.14); border-color: var(--cyan); }
+    .arch-box.amber { background: rgba(255,159,10,0.07); border-color: rgba(255,159,10,0.3); }
+    .arch-box.amber:hover { background: rgba(255,159,10,0.14); border-color: var(--amber); }
+    .arch-box.green { background: rgba(52,199,89,0.07); border-color: rgba(52,199,89,0.3); }
+    .arch-box.green:hover { background: rgba(52,199,89,0.14); border-color: var(--green); }
+    .arch-box.gray  { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1); }
+    .arch-box-name { font-family: var(--font-display); font-size: 0.88rem; font-weight: 600; }
+    .arch-box.cyan  .arch-box-name { color: var(--cyan); }
+    .arch-box.amber .arch-box-name { color: var(--amber); }
+    .arch-box.green .arch-box-name { color: var(--green); }
+    .arch-box.gray  .arch-box-name { color: var(--lgray); }
+    .arch-box-desc { font-size: 0.78rem; color: var(--lgray); margin-top: 0.25rem; line-height: 1.4; }
+    .arch-tooltip {
+      background: var(--black); border: 1px solid var(--cyan);
+      border-radius: 10px; padding: 1rem 1.25rem;
+      font-size: 0.82rem; color: var(--lgray); line-height: 1.6;
+      min-height: 3.5rem; transition: opacity 0.2s;
+      margin-top: 1.5rem;
+    }
+    .arch-tooltip strong { color: var(--cyan); display: block; margin-bottom: 0.25rem; font-family: var(--font-display); }
+    .arch-arrow { font-size: 1.2rem; color: var(--amber); flex-shrink: 0; }
+    .arch-arrow-down { text-align: center; font-size: 1.2rem; color: rgba(0,229,255,0.4); }
+    .arch-row-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+    /* ── COMPARISON TABLE ── */
+    .compare-wrap { overflow-x: auto; }
+    .compare-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    .compare-table th {
+      padding: 0.75rem 1rem; text-align: left;
+      font-family: var(--font-display); font-size: 0.85rem; font-weight: 600;
+      border-bottom: 2px solid #E2E8F0; color: #1E293B;
+    }
+    .compare-table th:first-child { color: var(--gray); font-weight: 500; }
+    .compare-table th.us { color: #1E3A5F; }
+    .compare-table td {
+      padding: 0.85rem 1rem; font-size: 0.875rem; color: var(--gray);
+      border-bottom: 1px solid #F1F5F9;
+    }
+    .compare-table td:first-child { color: #1E293B; font-weight: 500; }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table tr:hover td { background: #F8FAFC; }
+    .compare-table .us-col { font-weight: 600; color: #1E3A5F; }
+    .tag-yes  { color: #16A34A; }
+    .tag-no   { color: #DC2626; }
+    .tag-warn { color: #D97706; }
+
+    /* ── BUSINESS OUTCOMES ── */
+    .outcomes-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.5rem; }
+    .outcome-card {
+      background: var(--white); border-radius: 14px; padding: 2rem;
+      border: 1px solid #E2E8F0;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .outcome-card:hover { box-shadow: 0 12px 40px rgba(0,0,0,0.08); transform: translateY(-3px); }
+    .outcome-icon {
+      width: 48px; height: 48px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; margin-bottom: 1.25rem;
+    }
+    .outcome-icon.blue  { background: #EFF6FF; }
+    .outcome-icon.green { background: #F0FDF4; }
+    .outcome-icon.amber { background: #FFF7ED; }
+    .outcome-card h3 {
+      font-family: var(--font-display); font-size: 1.05rem; font-weight: 600;
+      color: #1E293B; margin-bottom: 0.5rem;
+    }
+    .outcome-card p { font-size: 0.9rem; color: var(--gray); line-height: 1.65; }
+    .outcome-metric {
+      margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid #F1F5F9;
+      font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;
+    }
+    .outcome-metric.blue  { color: #2563EB; }
+    .outcome-metric.green { color: #16A34A; }
+    .outcome-metric.amber { color: #D97706; }
+    .outcome-metric-lbl { font-size: 0.78rem; color: var(--gray); font-weight: 400; display: block; margin-top: 0.1rem; font-family: var(--font-body); }
+
+    /* ── WHY BUSINESS ── */
+    .why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .why-card {
+      background: var(--navy); border: 1px solid var(--card-border);
+      border-radius: 14px; padding: 2rem;
+    }
+    .why-num {
+      font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500;
+      color: var(--cyan); margin-bottom: 0.75rem; letter-spacing: 0.1em;
+    }
+    .why-card h3 {
+      font-family: var(--font-display); font-size: 1.05rem; font-weight: 600;
+      color: var(--white); margin-bottom: 0.6rem;
+    }
+    .why-card p { font-size: 0.875rem; color: var(--lgray); line-height: 1.65; }
+
+    /* ── TECH STACK ── */
+    .stack-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1.5rem; }
+    .stack-card {
+      background: var(--navy); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem;
+    }
+    .stack-cat {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 1rem; padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .stack-cat.cyan  { color: var(--cyan); }
+    .stack-cat.amber { color: var(--amber); }
+    .stack-cat.green { color: var(--green); }
+    .stack-cat.gray  { color: var(--lgray); }
+    .stack-items { display: flex; flex-direction: column; gap: 0.55rem; }
+    .stack-item { display: flex; justify-content: space-between; align-items: baseline; }
+    .stack-item-name { font-size: 0.875rem; font-weight: 600; color: var(--white); }
+    .stack-item-why  { font-size: 0.78rem; color: var(--lgray); text-align: right; max-width: 55%; }
+
+    /* ── CTA STRIP ── */
+    #cta {
+      background: linear-gradient(135deg, var(--black) 0%, #0A1628 50%, var(--black) 100%);
+      text-align: center; padding: 7rem 5%; position: relative; overflow: hidden;
+    }
+    .cta-glow {
+      position: absolute; bottom: -100px; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 400px;
+      background: radial-gradient(ellipse, rgba(0,229,255,0.14) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    #cta h2 {
+      font-family: var(--font-display); font-size: clamp(2rem,4vw,3.2rem);
+      font-weight: 700; color: var(--white); letter-spacing: -0.02em;
+      margin-bottom: 1rem; position: relative;
+    }
+    #cta h2 span { color: var(--cyan); }
+    #cta p {
+      font-size: 1.05rem; color: var(--lgray); margin-bottom: 2.5rem;
+      max-width: 520px; margin-left: auto; margin-right: auto; position: relative;
+    }
+    .cta-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; position: relative; }
+    .btn-cta-primary {
+      background: var(--cyan); color: var(--black);
+      padding: 1rem 2.5rem; border-radius: 8px;
+      font-weight: 700; font-size: 1.05rem; text-decoration: none;
+      font-family: var(--font-display);
+      box-shadow: 0 0 40px rgba(0,229,255,0.3);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-cta-primary:hover { transform: translateY(-2px); box-shadow: 0 0 60px rgba(0,229,255,0.45); }
+    .btn-cta-ghost {
+      background: transparent; color: var(--lgray);
+      padding: 1rem 2rem; border-radius: 8px;
+      font-weight: 500; font-size: 1rem; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .btn-cta-ghost:hover { color: var(--white); border-color: rgba(255,255,255,0.3); }
+    .cta-note { font-size: 0.8rem; color: rgba(255,255,255,0.3); margin-top: 1.5rem; position: relative; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--black); padding: 2.5rem 5%;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 1rem;
+    }
+    .footer-brand { font-family: var(--font-display); font-size: 0.9rem; font-weight: 600; color: var(--lgray); }
+    .footer-brand span { color: var(--cyan); }
+    .footer-badges { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .footer-badge {
+      font-size: 0.72rem; font-weight: 600; padding: 0.25rem 0.75rem;
+      border-radius: 100px; letter-spacing: 0.06em;
+    }
+    .badge-amd    { background: rgba(0,229,255,0.1); color: var(--cyan); border: 1px solid rgba(0,229,255,0.2); }
+    .badge-oss    { background: rgba(52,199,89,0.1); color: var(--green); border: 1px solid rgba(52,199,89,0.2); }
+    .badge-track  { background: rgba(255,159,10,0.1); color: var(--amber); border: 1px solid rgba(255,159,10,0.2); }
+    .footer-copy  { font-size: 0.8rem; color: rgba(255,255,255,0.25); }
+
+    /* ── DIVIDER ── */
+    .section-divider { height: 1px; background: #E2E8F0; }
+    .section-divider-dark { height: 1px; background: rgba(255,255,255,0.06); }
+
+    /* ── MONO TERMINAL SNIPPET ── */
+    .terminal {
+      background: #0A0F1A; border: 1px solid rgba(0,229,255,0.15);
+      border-radius: 12px; padding: 1.5rem 1.75rem;
+      font-family: var(--font-mono); font-size: 0.85rem;
+      color: #94A3B8; margin-top: 2.5rem;
+    }
+    .terminal-bar { display: flex; gap: 0.45rem; margin-bottom: 1.25rem; }
+    .t-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .t-dot.red { background: #FF5F57; }
+    .t-dot.yellow { background: #FEBC2E; }
+    .t-dot.green { background: #28C840; }
+    .t-line { margin-bottom: 0.4rem; }
+    .t-line .cmd { color: var(--cyan); }
+    .t-line .out { color: var(--green); }
+    .t-line .dim { color: #475569; }
+    .t-line .hi  { color: var(--white); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .problem-stats, .problem-cards, .outcomes-grid,
+      .arch-row-pair, .stack-grid, .why-grid { grid-template-columns: 1fr; }
+      .hero-stat-divider { display: none; }
+      .pipeline { flex-direction: column; align-items: center; }
+      .pipeline-step + .pipeline-step::before { display: none; }
+      nav .nav-links a:not(.btn-nav) { display: none; }
+      .compare-table th, .compare-table td { padding: 0.65rem 0.75rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hero-grid { animation: none; }
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">SafeSeedOps <span>Lite</span></div>
+  <div class="nav-links">
+    <a href="#how-it-works">How it works</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#business">For business</a>
+    <a href="#DASHBOARD_URL_HERE" class="btn-nav">Launch Dashboard →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-eyebrow">
+    <div class="eyebrow-dot"></div>
+    AMD Developer Hackathon: ACT II &nbsp;·&nbsp; Unicorn Track
+  </div>
+  <h1 class="hero-q">
+    Where does your<br/>
+    <span class="accent">test data</span> come from?
+  </h1>
+  <p class="hero-sub">
+    SafeSeedOps Lite generates privacy-safe, referentially-consistent synthetic databases
+    using multi-agent AI on AMD ROCm — in seconds, not weeks.
+  </p>
+  <div class="hero-ctas">
+    <a href="#DASHBOARD_URL_HERE" class="btn-primary">Launch Dashboard →</a>
+    <a href="#how-it-works" class="btn-ghost">See how it works</a>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-val">$2B+</div>
+      <div class="hero-stat-lbl">Synthetic data market (Gartner)</div>
+    </div>
+    <div class="hero-stat-divider"></div>
+    <div class="hero-stat">
+      <div class="hero-stat-val">100%</div>
+      <div class="hero-stat-lbl">FK integrity — every generation</div>
+    </div>
+    <div class="hero-stat-divider"></div>
+    <div class="hero-stat">
+      <div class="hero-stat-val">&lt;1s</div>
+      <div class="hero-stat-lbl">Schema validation, any DDL</div>
+    </div>
+    <div class="hero-stat-divider"></div>
+    <div class="hero-stat">
+      <div class="hero-stat-val">0</div>
+      <div class="hero-stat-lbl">PII in generated data — ever</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section id="problem" class="section-light">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">The problem</div>
+      <h2 class="section-title section-title-dark">Every team hits the same wall.</h2>
+      <p class="section-sub">Realistic relational data is the hardest dependency in software development — yet almost nobody solves it properly.</p>
+    </div>
+    <div class="problem-stats">
+      <div class="problem-stat">
+        <div class="problem-stat-num red">2–4 wks</div>
+        <div class="problem-stat-lbl">Typical time to handcraft test data for a multi-table schema</div>
+      </div>
+      <div class="problem-stat">
+        <div class="problem-stat-num amber">30–40%</div>
+        <div class="problem-stat-lbl">Of project time engineers spend on data plumbing, not features</div>
+      </div>
+      <div class="problem-stat">
+        <div class="problem-stat-num navy">$4.45M</div>
+        <div class="problem-stat-lbl">Average cost of a data breach from copying prod data into dev (IBM, 2023)</div>
+      </div>
+    </div>
+    <div class="problem-cards">
+      <div class="problem-card">
+        <div class="problem-icon">⏳</div>
+        <h3>Weeks lost on every project</h3>
+        <p>Handcrafting test data for complex relational schemas takes 2–4 weeks per project — and repeats every sprint, for every environment.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">💥</div>
+        <h3>FK violations break everything</h3>
+        <p>Null columns and broken foreign keys silently corrupt test suites — traced back to data, not code, after hours of debugging.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon">🔒</div>
+        <h3>Prod data in dev is a GDPR violation</h3>
+        <p>Copying production databases to local environments exposes PII, violates GDPR, SOC2, and HIPAA. One incident, one audit, one legal bill.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works" class="section-dark">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">How it works</div>
+      <h2 class="section-title section-title-light">Five steps. One command.</h2>
+      <p class="section-sub section-sub-light">SafeSeedOps runs your schema through a multi-agent pipeline — validation, planning, generation, and export — without you touching a single row.</p>
+    </div>
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <div class="pipeline-node">📐</div>
+        <div class="pipeline-step-name">Design schema</div>
+        <div class="pipeline-step-desc">Visual designer or paste PostgreSQL DDL directly</div>
+        <div class="pipeline-badge">Visual · DDL import</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-node">🛡️</div>
+        <div class="pipeline-step-name">Airlock validates</div>
+        <div class="pipeline-step-desc">14 rules across lexical, security, and semantic checks</div>
+        <div class="pipeline-badge amber">Blocks before generation</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-node">🗺️</div>
+        <div class="pipeline-step-name">DAG planning</div>
+        <div class="pipeline-step-desc">Topological sort: parents always seeded before children</div>
+        <div class="pipeline-badge">FK integrity guaranteed</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-node">🤖</div>
+        <div class="pipeline-step-name">LLM generates</div>
+        <div class="pipeline-step-desc">Gemma on AMD ROCm streams realistic, domain-correct rows</div>
+        <div class="pipeline-badge amber">ROCm · Fireworks · Fallback</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="pipeline-node">📦</div>
+        <div class="pipeline-step-name">Parquet export</div>
+        <div class="pipeline-step-desc">Clean files with manifest.json and SHA-256 checksums</div>
+        <div class="pipeline-badge green">CSV · JSON · Parquet</div>
+      </div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="t-dot red"></div>
+        <div class="t-dot yellow"></div>
+        <div class="t-dot green"></div>
+      </div>
+      <div class="t-line"><span class="dim">$</span> <span class="cmd">uv run seed dev</span></div>
+      <div class="t-line"><span class="out">✓</span> <span class="hi">Backend started</span> <span class="dim">— FastAPI on :8000</span></div>
+      <div class="t-line"><span class="out">✓</span> <span class="hi">Frontend started</span> <span class="dim">— React on :3000</span></div>
+      <div class="t-line"><span class="out">✓</span> <span class="hi">AMD ROCm detected</span> <span class="dim">— MI250 · local Gemma inference enabled</span></div>
+      <div class="t-line"><span class="out">✓</span> <span class="hi">Airlock engine ready</span> <span class="dim">— 14 rules loaded (v2.4.0)</span></div>
+      <div class="t-line" style="margin-top:0.75rem"><span class="dim">→ Open </span><span class="cmd">http://localhost:3000</span><span class="dim"> to start generating</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture" class="section-navy">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">Architecture</div>
+      <h2 class="section-title section-title-light">Five decoupled layers. Hover to explore.</h2>
+      <p class="section-sub section-sub-light">Every component is independently testable and swappable. Moving from SQLite to PostgreSQL, or from local ROCm to cloud, requires only a config change — no code rewrites.</p>
+    </div>
+    <div class="arch-wrap">
+      <div class="arch-diagram">
+        <!-- Row 1: Frontend -->
+        <div class="arch-row">
+          <div class="arch-box cyan" onclick="showTip('frontend')" tabindex="0">
+            <div class="arch-box-name">React SPA — Frontend</div>
+            <div class="arch-box-desc">Interactive schema designer · ER diagram · Cytoscape.js</div>
+          </div>
+        </div>
+        <div class="arch-arrow-down">▼</div>
+        <!-- Row 2: Gateway -->
+        <div class="arch-row">
+          <div class="arch-box cyan" onclick="showTip('backend')" tabindex="0">
+            <div class="arch-box-name">FastAPI Backend</div>
+            <div class="arch-box-desc">REST routing · Pydantic validation · OpenAPI auto-docs · Python 3.11</div>
+          </div>
+        </div>
+        <div class="arch-arrow-down">▼</div>
+        <!-- Row 3: AI Platform (split) -->
+        <div class="arch-row-pair">
+          <div class="arch-box amber" onclick="showTip('agents')" tabindex="0">
+            <div class="arch-box-name">Multi-Agent AI Platform</div>
+            <div class="arch-box-desc">Workflow Engine → Agent Manager → Tool Manager → 12 built-in tools · HITL verification</div>
+          </div>
+          <div class="arch-box amber" onclick="showTip('airlock')" tabindex="0">
+            <div class="arch-box-name">Airlock Validation Engine</div>
+            <div class="arch-box-desc">Lexical → Security → Semantic · 14 typed rules · SHA-256 fingerprinting</div>
+          </div>
+        </div>
+        <div class="arch-arrow-down">▼</div>
+        <!-- Row 4: Runtime (split) -->
+        <div class="arch-row-pair">
+          <div class="arch-box gray" onclick="showTip('runtime')" tabindex="0">
+            <div class="arch-box-name">Runtime Platform</div>
+            <div class="arch-box-desc">Redis cache · circuit breaker · LRU eviction · in-memory fallback</div>
+          </div>
+          <div class="arch-box gray" onclick="showTip('llm')" tabindex="0">
+            <div class="arch-box-name">LLM Gateway</div>
+            <div class="arch-box-desc">AMD ROCm → Fireworks AI → Any LLM · Gemma 2/3 · Llama 3.2</div>
+          </div>
+        </div>
+        <div class="arch-arrow-down">▼</div>
+        <!-- Row 5: Storage (split) -->
+        <div class="arch-row-pair">
+          <div class="arch-box green" onclick="showTip('sqlite')" tabindex="0">
+            <div class="arch-box-name">SQLite (source of truth)</div>
+            <div class="arch-box-desc">Projects · schemas · jobs · history · config · Unit-of-Work transactions</div>
+          </div>
+          <div class="arch-box green" onclick="showTip('parquet')" tabindex="0">
+            <div class="arch-box-name">Artifact Storage</div>
+            <div class="arch-box-desc">Parquet files · manifest.json · SHA-256 checksums · streaming downloads</div>
+          </div>
+        </div>
+        <!-- Tooltip -->
+        <div class="arch-tooltip" id="arch-tooltip">
+          <strong id="tip-title">👆 Click any layer to learn more</strong>
+          <span id="tip-body">Each component is independently testable, swappable, and documented. The entire stack starts with <code>uv run seed dev</code>.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section id="compare" class="section-light">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">Vs. the alternatives</div>
+      <h2 class="section-title section-title-dark">The only tool that does all three.</h2>
+      <p class="section-sub">Faker has no concept of relationships. SDV lacks real-time streaming and AMD support. SafeSeedOps combines LLM generation, referential integrity, and ROCm acceleration in one package.</p>
+    </div>
+    <div class="compare-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Faker</th>
+            <th>SDV</th>
+            <th class="us">SafeSeedOps Lite ✦</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Referential integrity (FK/PK)</td>
+            <td><span class="tag-no">✕ No FK awareness</span></td>
+            <td><span class="tag-warn">⚠ Partial, post-hoc fix</span></td>
+            <td class="us-col"><span class="tag-yes">✓ PK-first DAG planner</span></td>
+          </tr>
+          <tr>
+            <td>LLM-powered generation</td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td><span class="tag-yes">✓ Yes</span></td>
+            <td class="us-col"><span class="tag-yes">✓ Multi-provider (ROCm, Fireworks)</span></td>
+          </tr>
+          <tr>
+            <td>AMD ROCm support</td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td class="us-col"><span class="tag-yes">✓ Native Gemma on ROCm</span></td>
+          </tr>
+          <tr>
+            <td>Real-time row streaming</td>
+            <td><span class="tag-warn">⚠ Single values only</span></td>
+            <td><span class="tag-no">✕ Batch only</span></td>
+            <td class="us-col"><span class="tag-yes">✓ Row-by-row streaming</span></td>
+          </tr>
+          <tr>
+            <td>PostgreSQL DDL import</td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td class="us-col"><span class="tag-yes">✓ Full DDL parser</span></td>
+          </tr>
+          <tr>
+            <td>Parquet + manifest export</td>
+            <td><span class="tag-no">✕ CSV only</span></td>
+            <td><span class="tag-warn">⚠ CSV/JSON</span></td>
+            <td class="us-col"><span class="tag-yes">✓ JSON / CSV / Parquet + SHA-256</span></td>
+          </tr>
+          <tr>
+            <td>Multi-table FK graph support</td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td><span class="tag-warn">⚠ Limited</span></td>
+            <td class="us-col"><span class="tag-yes">✓ Complex FK graphs, any depth</span></td>
+          </tr>
+          <tr>
+            <td>Enterprise validation pipeline</td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td><span class="tag-no">✕ No</span></td>
+            <td class="us-col"><span class="tag-yes">✓ 14-rule Airlock engine</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- OUTCOMES -->
+<section id="outcomes" class="section-tint">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">Business outcomes</div>
+      <h2 class="section-title section-title-dark">The ROI is measurable from day one.</h2>
+      <p class="section-sub">SafeSeedOps replaces a manual, error-prone, legally risky process with an automated, compliant, audit-ready pipeline — for teams of any size.</p>
+    </div>
+    <div class="outcomes-grid">
+      <div class="outcome-card">
+        <div class="outcome-icon blue">⚡</div>
+        <h3>Engineering velocity</h3>
+        <p>Eliminate 2–4 weeks of data plumbing per project. Engineers ship features, not test fixtures. Every new environment gets populated in seconds.</p>
+        <div class="outcome-metric blue">
+          ~80%
+          <span class="outcome-metric-lbl">Reduction in time-to-test-data</span>
+        </div>
+      </div>
+      <div class="outcome-card">
+        <div class="outcome-icon green">🔐</div>
+        <h3>Compliance by design</h3>
+        <p>Zero PII ever leaves production. SafeSeedOps generates synthetic data from schemas, not records. GDPR, SOC2, and HIPAA compliance is structural, not procedural.</p>
+        <div class="outcome-metric green">
+          $0
+          <span class="outcome-metric-lbl">PII exposure risk in dev environments</span>
+        </div>
+      </div>
+      <div class="outcome-card">
+        <div class="outcome-icon amber">📊</div>
+        <h3>Data quality guarantee</h3>
+        <p>Every generated dataset passes 14 validation rules before a single row is created. FK integrity, PK uniqueness, enum constraints — all verified and logged.</p>
+        <div class="outcome-metric amber">
+          100%
+          <span class="outcome-metric-lbl">Referential integrity across all tables</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY BUSINESS -->
+<section id="business" class="section-dark">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">Why consider this</div>
+      <h2 class="section-title section-title-light">Built for the way modern teams actually work.</h2>
+      <p class="section-sub section-sub-light">Not a script. Not a toy. A production-hardened AI platform with a clean migration path from prototype to enterprise.</p>
+    </div>
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="why-num">01</div>
+        <h3>Production-grade from the start</h3>
+        <p>Multi-agent workflow engine, HITL verification, circuit breakers, Unit-of-Work transactions, SHA-256 artifact integrity, LRU eviction. This is running, shipped software — not a hackathon skeleton. Every engineering decision is documented and justified.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">02</div>
+        <h3>AMD-native — not a wrapper</h3>
+        <p>Gemma inference runs locally on AMD ROCm with zero API cost and zero network latency. The LLM Gateway auto-detects AMD GPUs at startup via <code style="color:var(--cyan);font-family:var(--font-mono);font-size:0.82em">rocm-smi</code> — no configuration required. Falls back to Fireworks AI on AMD-backed cloud infrastructure, then any major LLM.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">03</div>
+        <h3>Freemium path to enterprise SaaS</h3>
+        <p>SafeSeedOps Lite is Apache 2.0 open-source. SafeSeedOps Pro adds multi-tenant RBAC, OAuth2, live database connectivity (PostgreSQL, MySQL, Oracle), distributed AMD Cloud workers, SOC2/GDPR/HIPAA compliance tooling, and OpenTelemetry dashboards. The Lite architecture is Pro-compatible — no rewrite needed.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">04</div>
+        <h3>One command to start, zero dependencies</h3>
+        <p>The entire stack — backend, frontend, agents, validation, storage — starts with <code style="color:var(--cyan);font-family:var(--font-mono);font-size:0.82em">uv run seed dev</code>. No Docker required for local development. No cloud accounts needed. A new engineer can be generating synthetic data in under 3 minutes from a fresh clone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider-dark"></div>
+
+<!-- TECH STACK -->
+<section id="stack" class="section-dark" style="padding-top:4rem;">
+  <div class="max-w">
+    <div class="section-header">
+      <div class="section-label">Tech stack</div>
+      <h2 class="section-title section-title-light">Every choice has a reason.</h2>
+    </div>
+    <div class="stack-grid">
+      <div class="stack-card">
+        <div class="stack-cat cyan">Frontend</div>
+        <div class="stack-items">
+          <div class="stack-item"><span class="stack-item-name">React 18 + TypeScript</span><span class="stack-item-why">Strict typing, component-based</span></div>
+          <div class="stack-item"><span class="stack-item-name">Cytoscape.js</span><span class="stack-item-why">Interactive ER diagram</span></div>
+          <div class="stack-item"><span class="stack-item-name">Vite + Tailwind CSS</span><span class="stack-item-why">One-command startup, zero runtime CSS</span></div>
+        </div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-cat amber">Backend</div>
+        <div class="stack-items">
+          <div class="stack-item"><span class="stack-item-name">FastAPI + Python 3.11</span><span class="stack-item-why">Async, Pydantic-validated</span></div>
+          <div class="stack-item"><span class="stack-item-name">SQLAlchemy ORM</span><span class="stack-item-why">Unit-of-Work, per-entity repos</span></div>
+          <div class="stack-item"><span class="stack-item-name">PyArrow / Parquet</span><span class="stack-item-why">Columnar, snappy compression</span></div>
+        </div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-cat green">AI Platform</div>
+        <div class="stack-items">
+          <div class="stack-item"><span class="stack-item-name">Multi-agent workflow engine</span><span class="stack-item-why">Workflow → Agent → Tool</span></div>
+          <div class="stack-item"><span class="stack-item-name">Gemma via AMD ROCm</span><span class="stack-item-why">Local, zero cost, zero latency</span></div>
+          <div class="stack-item"><span class="stack-item-name">Fireworks AI fallback</span><span class="stack-item-why">AMD-backed cloud inference</span></div>
+        </div>
+      </div>
+      <div class="stack-card">
+        <div class="stack-cat gray">Infrastructure</div>
+        <div class="stack-items">
+          <div class="stack-item"><span class="stack-item-name">SQLite → PostgreSQL path</span><span class="stack-item-why">Single-file Lite; scalable Pro</span></div>
+          <div class="stack-item"><span class="stack-item-name">Redis + memory fallback</span><span class="stack-item-why">Circuit breaker, LRU eviction</span></div>
+          <div class="stack-item"><span class="stack-item-name">uv package manager</span><span class="stack-item-why">10× faster than pip</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <div class="cta-glow"></div>
+  <h2>Ready to <span>stop writing test data</span><br/>and start building?</h2>
+  <p>Launch the SafeSeedOps dashboard and generate your first synthetic database in under 3 minutes.</p>
+  <div class="cta-buttons">
+    <a href="#DASHBOARD_URL_HERE" class="btn-cta-primary">Launch Dashboard →</a>
+    <a href="https://github.com/your-repo-here" class="btn-cta-ghost">View on GitHub</a>
+  </div>
+  <div class="cta-note">Apache 2.0 open source &nbsp;·&nbsp; AMD Developer Hackathon: ACT II &nbsp;·&nbsp; Unicorn Track 2026</div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">SafeSeedOps <span>Lite</span></div>
+  <div class="footer-badges">
+    <span class="footer-badge badge-amd">AMD ROCm</span>
+    <span class="footer-badge badge-oss">Apache 2.0</span>
+    <span class="footer-badge badge-track">Unicorn Track</span>
+  </div>
+  <div class="footer-copy">© 2026 SafeSeedOps</div>
+</footer>
+
+<script>
+  // Architecture diagram tooltip
+  const tips = {
+    frontend: {
+      title: '🖥️ React SPA — Frontend',
+      body: 'Interactive schema designer with Cytoscape.js ER diagram. Drag, drop, and connect tables visually — or skip the UI and paste raw PostgreSQL DDL. Starts with `uv run seed dev`, no separate npm install needed.'
+    },
+    backend: {
+      title: '⚡ FastAPI Backend',
+      body: 'Python 3.11, async-native, fully Pydantic-validated request and response shapes with auto-generated OpenAPI docs. Handles routing, validation orchestration, topological planning, and dataset lifecycle management.'
+    },
+    agents: {
+      title: '🤖 Multi-Agent AI Platform',
+      body: 'Complete Workflow Engine → Agent Manager → Tool Manager chain. 12 built-in tools across 10 categories: memory query, memory snapshot, schema validation, markdown export, JSON transform, text search, and more. HITL verification gates for human oversight on sensitive runs.'
+    },
+    airlock: {
+      title: '🛡️ Airlock Validation Engine',
+      body: '3-stage pipeline: Lexical (parenthesis, quotes, reserved names) → Security (forbidden keywords, injection patterns, DROP/DELETE) → Semantic (duplicate tables, missing PKs, FK integrity, enum literals). 14 typed rules, confidence 0.97–1.00. Deterministic SHA-256 schema fingerprinting.'
+    },
+    runtime: {
+      title: '🔄 Runtime Platform',
+      body: 'Redis as ephemeral cache + circuit breaker (CLOSED → OPEN → HALF_OPEN). SQLite is the authoritative source of truth — Redis outage causes zero data loss. LRU eviction, event coalescing, lazy cache population, in-memory fallback on Redis failure.'
+    },
+    llm: {
+      title: '🧠 LLM Gateway',
+      body: 'AMD ROCm auto-detected via rocm-smi at startup — if found, local Gemma inference activates with zero config. Falls back to Fireworks AI (AMD-backed cloud), then any OpenAI-compatible LLM. Supports: Gemma 2 2B-IT, Gemma 2 9B-IT, Gemma 3 12B, Llama 3.2 3B.'
+    },
+    sqlite: {
+      title: '🗄️ SQLite (source of truth)',
+      body: 'The only durable persistence layer. Stores projects, schemas, jobs, history, dataset metadata, and settings. Never loses data on Redis outage. Unit-of-Work pattern with per-entity repositories (projects, schemas, jobs, audit, exports). Clear migration path to PostgreSQL for Pro.'
+    },
+    parquet: {
+      title: '📦 Artifact Storage',
+      body: 'Generated datasets stored as Parquet files with Snappy compression. Every dataset includes manifest.json with row counts, table checksums (SHA-256), platform version, and expiry. Streaming downloads convert Parquet row groups to CSV bytes on-the-fly — no memory bloat.'
+    }
+  };
+
+  function showTip(key) {
+    const t = tips[key];
+    document.getElementById('tip-title').textContent = t.title;
+    document.getElementById('tip-body').textContent = t.body;
+    document.querySelectorAll('.arch-box').forEach(b => b.style.outline = 'none');
+    event.currentTarget.style.outline = '2px solid var(--cyan)';
+    event.currentTarget.style.outlineOffset = '2px';
+  }
+
+  // Keyboard support for arch boxes
+  document.querySelectorAll('.arch-box').forEach(box => {
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); box.click(); }
+    });
+  });
+
+  // Smooth scroll for nav links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+    });
+  });
+
+  // Nav transparency on scroll
+  const nav = document.querySelector('nav');
+  window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 40
+      ? 'rgba(8,14,26,0.95)' : 'rgba(8,14,26,0.85)';
+  });
+</script>
+</body>
+</html>
