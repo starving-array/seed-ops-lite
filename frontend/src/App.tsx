@@ -282,6 +282,10 @@ function AppContent() {
                 <span className="text-2xl">☰</span>
               </button>
               <div className="font-semibold text-slate-200 text-lg flex items-center gap-3">
+                <a href="/" style={{ fontSize: '0.8rem', color: '#64748B', textDecoration: 'none' }}>
+                  ← Home
+                </a>
+                <span className="text-slate-600">|</span>
                 <span>{currentPageTitle}</span>
                 <Badge
                   variant={
@@ -413,7 +417,7 @@ export default function App() {
       <NotificationProvider>
         <ProjectProvider>
           <SchemaProvider>
-            <Router>
+            <Router basename="/app">
               <AppContent />
             </Router>
           </SchemaProvider>
